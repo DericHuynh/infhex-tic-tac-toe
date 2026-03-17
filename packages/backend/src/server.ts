@@ -2,6 +2,7 @@ import './env';
 import express, { type Request } from 'express';
 import cors from 'cors';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
 import { Server, type Socket } from 'socket.io';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -14,18 +15,27 @@ import {
     SessionInfo,
     ServerToClientEvents,
     ClientToServerEvents,
+    DUMMY,
 } from '@ih3t/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const frontendDistPath = join(__dirname, '../../frontend/dist');
 
 const app = express();
 app.set('trust proxy', true);
-const allowedOrigins = new Set([
-    'http://localhost:5173',
-    'http://127.0.0.1:5173'
-]);
-const corsOptions: cors.CorsOptions = {
+const configuredOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+const allowedOrigins = new Set(configuredOrigins);
+
+if (process.env.NODE_ENV !== 'production') {
+    allowedOrigins.add('http://localhost:5173');
+    allowedOrigins.add('http://127.0.0.1:5173');
+}
+
+const corsOptions: cors.CorsOptions | null = allowedOrigins.size > 0 ? {
     origin(origin, callback) {
         // Allow non-browser requests and configured dev origins.
         if (!origin || allowedOrigins.has(origin)) {
@@ -38,15 +48,17 @@ const corsOptions: cors.CorsOptions = {
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'X-Device-Id'],
     credentials: true
-};
+} : null;
 
 // CORS middleware for API requests
-app.use(cors(corsOptions));
+if (corsOptions) {
+    app.use(cors(corsOptions));
+}
 
-const server = createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+export const server = createServer(app);
+const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, corsOptions ? {
     cors: corsOptions
-});
+} : undefined);
 
 interface StoredGameSession extends GameSession {
     createdAt: number;
@@ -357,9 +369,9 @@ function removePlayerFromSession(session: StoredGameSession, playerId: string, s
     updateSessionState(session);
 }
 
-// Serve static files from dist in production
-if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(join(__dirname, '../dist')));
+// Serve the built frontend from the backend in production containers.
+if (process.env.NODE_ENV === 'production' && existsSync(frontendDistPath)) {
+    app.use(express.static(frontendDistPath));
 }
 
 // API routes
@@ -538,10 +550,20 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV === 'production' && existsSync(frontendDistPath)) {
+    app.get(/^(?!\/api(?:\/|$)|\/socket\.io(?:\/|$)).*/, (_req, res) => {
+        res.sendFile(join(frontendDistPath, 'index.html'));
+    });
+}
+
+
+if (import.meta.env.PROD) {
+    const PORT = process.env.PORT || 3001;
+    server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+
+}
 
 server.on('close', () => {
     void closeMetricLogger();

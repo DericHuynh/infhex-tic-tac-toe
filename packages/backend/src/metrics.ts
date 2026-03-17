@@ -1,4 +1,4 @@
-import './env';
+import './env.js';
 import { MongoClient, type Collection, type Document } from 'mongodb';
 
 type MetricDetails = Record<string, unknown>;

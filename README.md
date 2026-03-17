@@ -85,6 +85,37 @@ pnpm dev
 ```
 The frontend will run on `http://localhost:5173`
 
+### Production Build
+
+Build the frontend and backend together:
+
+```bash
+pnpm build
+pnpm start
+```
+
+In production, the backend serves the compiled frontend from the same container or host on `http://localhost:3001`.
+
+### Docker
+
+Build the image:
+
+```bash
+pnpm docker:build
+```
+
+Run it:
+
+```bash
+pnpm docker:run
+```
+
+If you want to load backend environment variables from [`packages/backend/.env`](/g:/git/web/ih3t/packages/backend/.env), use:
+
+```bash
+pnpm docker:run:env
+```
+
 ### Game Session Management
 
 The app features a complete 2-player game lobby system:
@@ -128,6 +159,10 @@ The app features a complete 2-player game lobby system:
 - `pnpm dev` - Start frontend dev server
 - `pnpm server` - Start backend server
 - `pnpm server:dev` - Start backend server with auto-reload
+- `pnpm start` - Start the built production backend, which also serves the built frontend
+- `pnpm docker:build` - Build the production container image
+- `pnpm docker:run` - Run the production container on port 3001
+- `pnpm docker:run:env` - Run the production container with variables from `packages/backend/.env`
 - `pnpm lint` - Lint all packages
 - `pnpm clean` - Clean all build artifacts
 - `pnpm type-check` - Type check all packages

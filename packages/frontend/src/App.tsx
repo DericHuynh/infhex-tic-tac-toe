@@ -12,6 +12,19 @@ import { getOrCreateDeviceId } from './deviceId'
 
 type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner' | 'loser'
 
+function getApiBaseUrl() {
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, '')
+  }
+
+  return import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin
+}
+
+function getSocketUrl() {
+  return import.meta.env.VITE_SOCKET_URL ?? getApiBaseUrl()
+}
+
 function App() {
   const deviceIdRef = useRef<string>(getOrCreateDeviceId())
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
@@ -32,6 +45,8 @@ function App() {
     placementsRemaining: 0,
     currentTurnExpiresAt: null
   })
+  const apiBaseUrlRef = useRef<string>(getApiBaseUrl())
+  const socketUrlRef = useRef<string>(getSocketUrl())
 
   const syncAvailableSessions = (sessions: SessionInfo[]) => {
     setAvailableSessions(sessions.filter((session) => session.canJoin))
@@ -81,7 +96,7 @@ function App() {
 
   useEffect(() => {
     // Connect to the server
-    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io('http://localhost:3001', {
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketUrlRef.current, {
       auth: {
         deviceId: deviceIdRef.current
       },
@@ -171,7 +186,7 @@ function App() {
 
   const fetchAvailableSessions = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/sessions', {
+      const response = await fetch(`${apiBaseUrlRef.current}/api/sessions`, {
         credentials: 'include',
         headers: {
           'X-Device-Id': deviceIdRef.current
@@ -187,7 +202,7 @@ function App() {
 
   const hostGame = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/sessions', {
+      const response = await fetch(`${apiBaseUrlRef.current}/api/sessions`, {
         method: 'POST',
         credentials: 'include',
         headers: {

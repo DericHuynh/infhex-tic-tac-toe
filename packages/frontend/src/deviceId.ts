@@ -29,9 +29,7 @@ function getCookieValue(name: string): string | null {
 }
 
 function persistDeviceId(deviceId: string): void {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId)
-  }
+  window?.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId)
 
   if (typeof document !== 'undefined') {
     document.cookie = `${DEVICE_ID_COOKIE_NAME}=${encodeURIComponent(deviceId)}; max-age=${DEVICE_ID_COOKIE_MAX_AGE_SECONDS}; path=/; samesite=lax`
@@ -39,10 +37,8 @@ function persistDeviceId(deviceId: string): void {
 }
 
 export function getOrCreateDeviceId(): string {
-  const storedDeviceId = typeof window !== 'undefined'
-    ? window.localStorage.getItem(DEVICE_ID_STORAGE_KEY)
-    : null
   const cookieDeviceId = getCookieValue(DEVICE_ID_COOKIE_NAME)
+  const storedDeviceId = window?.localStorage.getItem(DEVICE_ID_STORAGE_KEY) ?? null;
   const deviceId = storedDeviceId ?? cookieDeviceId ?? generateDeviceId()
 
   persistDeviceId(deviceId)

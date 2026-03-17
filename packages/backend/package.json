@@ -2,12 +2,12 @@
     "name": "@ih3t/backend",
     "version": "0.0.0",
     "private": true,
+    "type": "module",
     "main": "dist/server.js",
     "scripts": {
-        "build": "tsc --build",
-        "start": "node dist/server.js",
-        "dev": "tsx watch src/server.ts",
-        "server": "tsx src/server.ts",
+        "build": "vite build",
+        "dev": "vite",
+        "type-check": "tsc --noEmit",
         "clean": "rm -rf dist"
     },
     "dependencies": {
@@ -22,7 +22,10 @@
     "devDependencies": {
         "@types/express": "^5.0.6",
         "@types/node": "^25.5.0",
+        "rollup-plugin-node-externals": "^8.1.2",
         "tsx": "^4.21.0",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vite": "^7.0.0",
+        "vite-plugin-node": "^7.0.0"
     }
 }
