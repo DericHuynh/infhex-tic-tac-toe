@@ -68,14 +68,16 @@ interface GameScreenProps {
   interactionEnabled?: boolean
 }
 
-function getPlayerColor(playerId: string): string {
+function getPlayerColor(players: string[], playerId: string): string {
   const palette = ['#fbbf24', '#38bdf8', '#f472b6', '#34d399', '#c084fc', '#fb7185']
-  let hash = 0
-  for (let index = 0; index < playerId.length; index += 1) {
-    hash = (hash * 31 + (playerId.codePointAt(index) ?? 0)) >>> 0
+  const index = players.indexOf(playerId);
+  if (index === -1) {
+    return palette[0];
+  } else if (index >= players.length) {
+    return palette[players.length - 1];
+  } else {
+    return palette[index];
   }
-
-  return palette[hash % palette.length]
 }
 
 function getCellKey(x: number, y: number): string {
@@ -254,7 +256,7 @@ function GameScreen({
     return new Set(renderableCells.map((cell) => cell.key))
   }, [renderableCells])
 
-  const ownColor = getPlayerColor(currentPlayerId || (isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest'))
+  const ownColor = getPlayerColor(players, currentPlayerId)
   const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
   const turnHeadline = isOwnTurn ? 'Your turn' : 'Opponents turn'
   const turnDetail = isOwnTurn
@@ -374,7 +376,7 @@ function GameScreen({
       }
 
       traceHexPath(context, screenX, screenY, hexRadius - 2)
-      context.fillStyle = getPlayerColor(cell.occupiedBy)
+      context.fillStyle = getPlayerColor(players, cell.occupiedBy)
       context.fill()
 
       // context.fillStyle = '#e2e8f0'
