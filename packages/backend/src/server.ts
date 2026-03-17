@@ -95,10 +95,10 @@ function broadcastSessions(): void {
 function updateSessionState(session: GameSession): SessionState {
     if (session.players.length >= session.maxPlayers) {
         session.state = 'ingame';
-        if (!session.gameState.currentTurnPlayerId) {
-            session.gameState.currentTurnPlayerId = session.players[0] ?? null;
-            session.gameState.placementsRemaining = 2;
-        }
+        session.gameState.currentTurnPlayerId = session.players[0] ?? null;
+
+        /* We start with one turn only to omit the first player advantage of placing the first cell in the middle of the board. */
+        session.gameState.placementsRemaining = 1;
     } else if (session.state !== 'finished') {
         session.state = 'lobby';
         session.gameState.currentTurnPlayerId = null;
