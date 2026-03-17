@@ -47,7 +47,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
 
 const gameSessions = new Map<string, GameSession>();
 const turnTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
-const TURN_TIMEOUT_MS = 45_000;
+const TURN_TIMEOUT_MS = 45_0000;
 
 function getCellKey(x: number, y: number): string {
     return `${x},${y}`;

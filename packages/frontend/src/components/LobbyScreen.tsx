@@ -15,7 +15,7 @@ function LobbyScreen({
 }: LobbyScreenProps) {
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-10">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-between px-6 py-10">
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
           <section className="relative flex min-h-[34rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur md:p-10">
             <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-amber-300/20 blur-3xl" />
@@ -101,6 +101,11 @@ function LobbyScreen({
             </div>
           </section>
         </div>
+
+        <footer className="mt-10 text-center text-xs uppercase tracking-[0.22em] text-slate-400">
+          <div>Made with love by WolverinDEV</div>
+          <div className="mt-2">Copyright © {new Date().getFullYear()}</div>
+        </footer>
       </div>
     </div>
   )

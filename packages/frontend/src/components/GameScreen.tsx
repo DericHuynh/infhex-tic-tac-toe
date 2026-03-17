@@ -575,15 +575,10 @@ function GameScreen({
 
           {interactionEnabled && (
             <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 text-right shadow-[0_12px_45px_rgba(15,23,42,0.22)] absolute top-0 right-0 backdrop-blur-md">
-              <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
               <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
+              <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
+              <div className="text-slate-300">Connect 5 hexagons in a row</div>
               <div className="mt-4 space-y-3 text-sm">
-                <div className="border-r border-white/18 pr-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
-                  <div className="mt-1 text-white">{renderableCells.length} active</div>
-                  <div className="text-slate-300">{boardState.cells.length} occupied</div>
-                </div>
-
                 <div className="border-r border-white/18 pr-3">
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
                   <div className="mt-1 flex items-center justify-end gap-2.5 text-white">
@@ -593,6 +588,12 @@ function GameScreen({
                       style={{ backgroundColor: ownColor }}
                     />
                   </div>
+                </div>
+
+                <div className="border-r border-white/18 pr-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
+                  <div className="mt-1 text-white">{renderableCells.length} active</div>
+                  <div className="text-slate-300">{boardState.cells.length} occupied</div>
                 </div>
 
                 <div className="border-r border-white/18 pr-3">
