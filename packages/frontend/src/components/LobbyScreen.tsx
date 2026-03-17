@@ -47,12 +47,11 @@ function LobbyScreen({
                 >
                   Host Match
                 </button>
-                <div className={`inline-flex items-center rounded-full border px-4 py-3 text-sm font-medium ${isConnected
-                  ? 'border-emerald-300/40 bg-emerald-300/10 text-emerald-100'
-                  : 'border-rose-300/40 bg-rose-300/10 text-rose-100'
-                  }`}>
-                  {isConnected ? 'Client Connected' : 'Client Disconnected'}
-                </div>
+                {!isConnected && (
+                  <div className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
+                    Not connected to server
+                  </div>
+                )}
               </div>
             </div>
           </section>

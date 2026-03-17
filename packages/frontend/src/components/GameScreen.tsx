@@ -517,97 +517,97 @@ function GameScreen({
         <div className="flex h-full flex-col justify-between gap-4">
           {interactionEnabled && (
             <div className="flex justify-center absolute top-3 left-0 right-0">
-            <div className="pointer-events-none shadow-xxl w-full max-w-md rounded-md bg-slate-800 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className={`h-2.5 w-2.5 rounded-full ${isOwnTurn ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                <div className="min-w-0 flex-1 spacing">
-                  <div className={`text-sm font-bold uppercase tracking-[0.16em] ${isOwnTurn
-                    ? 'bg-emerald-400/16 text-emerald-500'
-                    : 'bg-white/8 text-slate-500'
-                    }`}>
-                    {turnHeadline}
+              <div className="pointer-events-none shadow-xxl w-full max-w-md rounded-md bg-slate-800 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className={`h-2.5 w-2.5 rounded-full ${isOwnTurn ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  <div className="min-w-0 flex-1 spacing">
+                    <div className={`text-sm font-bold uppercase tracking-[0.16em] ${isOwnTurn
+                      ? 'bg-emerald-400/16 text-emerald-500'
+                      : 'bg-white/8 text-slate-500'
+                      }`}>
+                      {turnHeadline}
+                    </div>
+                    <div className="text-sm text-slate-200">{turnDetail}</div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
+                      {formatCountdown(turnCountdownMs)} remaining
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-200">{turnDetail}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                    {formatCountdown(turnCountdownMs)} remaining
-                  </div>
-                </div>
-                <div className="flex w-14 gap-1.5">
-                  {Array.from({ length: 2 }, (_, index) => {
-                    let color;
-                    if (index >= 2 - boardState.placementsRemaining) {
-                      color = isOwnTurn ? 'bg-emerald-500' : 'bg-white/90'
-                    } else {
-                      color = 'bg-white/40'
-                    }
+                  <div className="flex w-14 gap-1.5">
+                    {Array.from({ length: 2 }, (_, index) => {
+                      let color;
+                      if (index >= 2 - boardState.placementsRemaining) {
+                        color = isOwnTurn ? 'bg-emerald-500' : 'bg-white/90'
+                      } else {
+                        color = 'bg-white/40'
+                      }
 
-                    return (
-                      <span
-                        key={index}
-                        className={`h-2 flex-1 rounded-full ${color}`}
-                      />
-                    )
-                  })}
+                      return (
+                        <span
+                          key={index}
+                          className={`h-2 flex-1 rounded-full ${color}`}
+                        />
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
             </div>
           )}
 
           {interactionEnabled && (
             <div className="pointer-events-auto flex flex-wrap bottom-2 right-2 absolute gap-2">
-            <button
-              onClick={() => {
-                viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
-                scheduleDraw()
-              }}
-              className="rounded-full bg-sky-600 w-40 px-4 py-2 font-medium shadow-lg hover:bg-sky-500"
-            >
-              Reset View
-            </button>
-            <button
-              onClick={onLeave}
-              className="rounded-full bg-red-500 w-40 px-4 py-2 font-medium shadow-lg hover:bg-red-400"
-            >
-              Leave Game
-            </button>
+              <button
+                onClick={() => {
+                  viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
+                  scheduleDraw()
+                }}
+                className="rounded-full bg-sky-600 w-40 px-4 py-2 font-medium shadow-lg hover:bg-sky-500"
+              >
+                Reset View
+              </button>
+              <button
+                onClick={onLeave}
+                className="rounded-full bg-red-500 w-40 px-4 py-2 font-medium shadow-lg hover:bg-red-400"
+              >
+                Leave Game
+              </button>
             </div>
           )}
 
           {interactionEnabled && (
-            <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 text-right shadow-[0_12px_45px_rgba(15,23,42,0.22)] absolute bottom-16 right-2 backdrop-blur-md">
-            <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
-            <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="border-r border-white/18 pr-3">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
-                <div className="mt-1 text-white">{renderableCells.length} active</div>
-                <div className="text-slate-300">{boardState.cells.length} occupied</div>
-              </div>
+            <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 text-right shadow-[0_12px_45px_rgba(15,23,42,0.22)] absolute top-0 right-0 backdrop-blur-md">
+              <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
+              <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="border-r border-white/18 pr-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
+                  <div className="mt-1 text-white">{renderableCells.length} active</div>
+                  <div className="text-slate-300">{boardState.cells.length} occupied</div>
+                </div>
 
-              <div className="border-r border-white/18 pr-3">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
-                <div className="mt-1 flex items-center justify-end gap-2.5 text-white">
-                  <span>{ownColor}</span>
-                  <span
-                    className="h-3.5 w-3.5 rounded-full border border-white/20"
-                    style={{ backgroundColor: ownColor }}
-                  />
+                <div className="border-r border-white/18 pr-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
+                  <div className="mt-1 flex items-center justify-end gap-2.5 text-white">
+                    <span>{ownColor}</span>
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border border-white/20"
+                      style={{ backgroundColor: ownColor }}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-r border-white/18 pr-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Hovered Cell</div>
+                  <div className="mt-1 text-white">
+                    {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
+                  </div>
+                </div>
+
+                <div className="border-r border-white/18 pr-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
+                  <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
                 </div>
               </div>
-
-              <div className="border-r border-white/18 pr-3">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Hovered Cell</div>
-                <div className="mt-1 text-white">
-                  {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
-                </div>
-              </div>
-
-              <div className="border-r border-white/18 pr-3">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
-                <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
-              </div>
-            </div>
             </div>
           )}
         </div>
