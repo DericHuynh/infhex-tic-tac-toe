@@ -193,6 +193,10 @@ function GameScreen({
 
   const ownColor = getPlayerColor(currentPlayerId || (isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest'))
   const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
+  const turnHeadline = isOwnTurn ? 'Your turn' : 'Opponents turn'
+  const turnDetail = isOwnTurn
+    ? `Place ${boardState.placementsRemaining} more ${boardState.placementsRemaining === 1 ? 'cell' : 'cells'}.`
+    : `Waiting for the other player to finish ${boardState.placementsRemaining} ${boardState.placementsRemaining === 1 ? 'move' : 'moves'}.`
 
   latestDataRef.current = {
     boardState,
@@ -245,6 +249,10 @@ function GameScreen({
     context.clearRect(0, 0, width, height)
     context.fillStyle = '#0f172a'
     context.fillRect(0, 0, width, height)
+    if (!isOwnTurn) {
+      context.fillStyle = 'rgba(15, 23, 42, 0.22)'
+      context.fillRect(0, 0, width, height)
+    }
 
     const { offsetX, offsetY, scale } = viewRef.current
     const centerX = width / 2 + offsetX
@@ -367,7 +375,7 @@ function GameScreen({
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-white">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing"
+        className={`absolute inset-0 h-full w-full ${isOwnTurn ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed'}`}
         onMouseDown={(event) => {
           dragStateRef.current = {
             startX: event.clientX,
@@ -448,66 +456,92 @@ function GameScreen({
         }}
       />
 
-      <div className="pointer-events-none absolute inset-0 p-4 sm:p-6">
+      <div className="pointer-events-none absolute inset-0">
         <div className="flex h-full flex-col justify-between gap-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 shadow-[0_12px_45px_rgba(15,23,42,0.22)] backdrop-blur-md">
-              <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
-              <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
-                  <div className="mt-1 text-white">{renderableCells.length} active</div>
-                  <div className="text-slate-300">{boardState.cells.length} occupied</div>
-                </div>
-
-                <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
-                  <div className="mt-1 flex items-center gap-2.5 text-white">
-                    <span
-                      className="h-3.5 w-3.5 rounded-full border border-white/20"
-                      style={{ backgroundColor: ownColor }}
-                    />
-                    <span>{ownColor}</span>
+          <div className="flex justify-center absolute top-3 left-0 right-0">
+            <div className="pointer-events-none shadow-xxl w-full max-w-md rounded-md bg-slate-800 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className={`h-2.5 w-2.5 rounded-full ${isOwnTurn ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                <div className="min-w-0 flex-1 spacing">
+                  <div className={`text-sm font-bold uppercase tracking-[0.16em] ${isOwnTurn
+                    ? 'bg-emerald-400/16 text-emerald-500'
+                    : 'bg-white/8 text-slate-500'
+                    }`}>
+                    {turnHeadline}
                   </div>
+                  <div className="text-sm text-slate-200">{turnDetail}</div>
                 </div>
+                <div className="flex w-14 gap-1.5">
+                  {Array.from({ length: 2 }, (_, index) => {
+                    let color;
+                    if (index >= 2 - boardState.placementsRemaining) {
+                      color = isOwnTurn ? 'bg-emerald-500' : 'bg-white/90'
+                    } else {
+                      color = 'bg-white/40'
+                    }
 
-                <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Hovered Cell</div>
-                  <div className="mt-1 text-white">
-                    {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
-                  </div>
-                </div>
-
-                <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
-                  <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
-                </div>
-
-                <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Turn</div>
-                  <div className="mt-1 text-white">{isOwnTurn ? 'Your turn' : 'Opponent turn'}</div>
-                  <div className="text-slate-300">{boardState.placementsRemaining} placements left</div>
+                    return (
+                      <span
+                        key={index}
+                        className={`h-2 flex-1 rounded-full ${color}`}
+                      />
+                    )
+                  })}
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="pointer-events-auto flex flex-wrap gap-2 self-start">
-              <button
-                onClick={() => {
-                  viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
-                  scheduleDraw()
-                }}
-                className="rounded-full bg-sky-600 px-4 py-2 font-medium shadow-lg hover:bg-sky-500"
-              >
-                Reset View
-              </button>
-              <button
-                onClick={onLeave}
-                className="rounded-full bg-red-500 px-4 py-2 font-medium shadow-lg hover:bg-red-400"
-              >
-                Leave Game
-              </button>
+          <div className="pointer-events-auto flex flex-wrap bottom-2 right-2 absolute gap-2">
+            <button
+              onClick={() => {
+                viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
+                scheduleDraw()
+              }}
+              className="rounded-full bg-sky-600 w-40 px-4 py-2 font-medium shadow-lg hover:bg-sky-500"
+            >
+              Reset View
+            </button>
+            <button
+              onClick={onLeave}
+              className="rounded-full bg-red-500 w-40 px-4 py-2 font-medium shadow-lg hover:bg-red-400"
+            >
+              Leave Game
+            </button>
+          </div>
+
+          <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 text-right shadow-[0_12px_45px_rgba(15,23,42,0.22)] absolute top-0 right-0 backdrop-blur-md">
+            <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
+            <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="border-r border-white/18 pr-3">
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
+                <div className="mt-1 text-white">{renderableCells.length} active</div>
+                <div className="text-slate-300">{boardState.cells.length} occupied</div>
+              </div>
+
+              <div className="border-r border-white/18 pr-3">
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
+                <div className="mt-1 flex items-center justify-end gap-2.5 text-white">
+                  <span>{ownColor}</span>
+                  <span
+                    className="h-3.5 w-3.5 rounded-full border border-white/20"
+                    style={{ backgroundColor: ownColor }}
+                  />
+                </div>
+              </div>
+
+              <div className="border-r border-white/18 pr-3">
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Hovered Cell</div>
+                <div className="mt-1 text-white">
+                  {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
+                </div>
+              </div>
+
+              <div className="border-r border-white/18 pr-3">
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
+                <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
+              </div>
             </div>
           </div>
         </div>
