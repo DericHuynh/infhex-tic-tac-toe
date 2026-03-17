@@ -5,7 +5,7 @@ interface WinnerScreenProps {
   onReturnToLobby: () => void
 }
 
-function WinnerScreen({ reason, onReturnToLobby }: WinnerScreenProps) {
+function WinnerScreen({ reason, onReturnToLobby }: Readonly<WinnerScreenProps>) {
   const message = reason === 'timeout'
     ? 'The other player failed to place a cell before the timer ran out.'
     : 'The other player disconnected.'

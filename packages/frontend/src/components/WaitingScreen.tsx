@@ -1,10 +1,11 @@
 interface WaitingScreenProps {
   sessionId: string
   playerCount: number
+  onInviteFriend: () => void
   onCancel: () => void
 }
 
-function WaitingScreen({ sessionId, playerCount, onCancel }: WaitingScreenProps) {
+function WaitingScreen({ sessionId, playerCount, onInviteFriend, onCancel }: Readonly<WaitingScreenProps>) {
   return (
     <div className="relative flex min-h-[34rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white/8 p-8 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur md:p-10">
       <div className="absolute -left-6 top-8 h-24 w-24 rounded-full bg-sky-400/25 blur-2xl" />
@@ -31,12 +32,20 @@ function WaitingScreen({ sessionId, playerCount, onCancel }: WaitingScreenProps)
           </div>
         </div>
 
-        <button
-          onClick={onCancel}
-          className="mt-8 rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-rose-400"
-        >
-          Cancel Lobby
-        </button>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={onInviteFriend}
+            className="rounded-full bg-sky-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-sky-300"
+          >
+            Invite Friend
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-rose-400"
+          >
+            Cancel Lobby
+          </button>
+        </div>
       </div>
     </div>
   )

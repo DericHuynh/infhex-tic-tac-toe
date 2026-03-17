@@ -10,10 +10,8 @@ import {
     CreateSessionResponse,
     SessionFinishReason,
     SessionInfo,
-    SessionState,
     ServerToClientEvents,
     ClientToServerEvents,
-    GameAction
 } from '@ih3t/shared';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -73,6 +71,7 @@ function emitGameState(sessionId: string): void {
 
     io.to(sessionId).emit('game-state', {
         sessionId,
+        sessionState: session.state,
         gameState: {
             cells: getBoardCells(session),
             currentTurnPlayerId: session.gameState.currentTurnPlayerId,
@@ -100,24 +99,26 @@ function scheduleTurnTimeout(sessionId: string): void {
     clearTurnTimeout(sessionId);
 
     const session = gameSessions.get(sessionId);
-    if (!session || session.state !== 'ingame' || !session.gameState.currentTurnPlayerId || !session.gameState.currentTurnExpiresAt) {
+    if (session?.state !== 'ingame' || !session.gameState.currentTurnPlayerId || !session.gameState.currentTurnExpiresAt) {
         return;
     }
 
     const delay = Math.max(0, session.gameState.currentTurnExpiresAt - Date.now());
     const timeout = setTimeout(() => {
         const activeSession = gameSessions.get(sessionId);
-        if (!activeSession || activeSession.state !== 'ingame' || activeSession.players.length < 2) {
+        if (activeSession?.state !== 'ingame' || activeSession.players.length < 2) {
             clearTurnTimeout(sessionId);
             return;
         }
+
         const timedOutPlayerId = activeSession.gameState.currentTurnPlayerId;
         if (!timedOutPlayerId) {
             clearTurnTimeout(sessionId);
             return;
         }
 
-        finishSession(sessionId, timedOutPlayerId, 'timeout');
+        const winningPlayerId = activeSession.players.find(playerId => playerId !== timedOutPlayerId) ?? null;
+        finishSession(sessionId, 'timeout', winningPlayerId);
     }, delay);
 
     turnTimeouts.set(sessionId, timeout);
@@ -137,37 +138,76 @@ function broadcastSessions(): void {
     io.emit('sessions-updated', getSessionList());
 }
 
-function updateSessionState(session: GameSession): SessionState {
-    if (session.players.length >= session.maxPlayers) {
-        session.state = 'ingame';
-        if (!session.gameState.currentTurnPlayerId) {
-            /* We start with one turn only to omit the first player advantage of placing the first cell in the middle of the board. */
-            setTurn(session, session.players[0] ?? null, 1);
-        }
-    } else if (session.state !== 'finished') {
-        session.state = 'lobby';
-        setTurn(session, null, 0);
+function updateSessionState(session: GameSession) {
+    if (session.players.length === 0) {
+        /* No players in session. Deleting session. */
+        console.log(`Terminating session ${session.id} (no players)`);
+        finishSession(session.id, "terminated", null);
+        return
     }
 
-    return session.state;
+    switch (session.state) {
+        case "lobby":
+            if (session.players.length < session.maxPlayers) {
+                /* waiting for more players */
+                return
+            }
+
+            session.state = 'ingame';
+
+            /* We start with one turn only to omit the first player advantage of placing the first cell in the middle of the board. */
+            setTurn(session, session.players[0] ?? null, 1);
+            scheduleTurnTimeout(session.id);
+
+            emitGameState(session.id);
+            broadcastSessions()
+
+            console.log(`Session ${session.id} started.`);
+            break;
+
+        case "ingame":
+            break;
+
+        case "finished":
+            break;
+
+    }
 }
 
-function finishSession(sessionId: string, loserId: string, reason: SessionFinishReason): void {
+function finishSession(sessionId: string, reason: SessionFinishReason, winningPlayerId: string | null): void {
     const session = gameSessions.get(sessionId);
     if (!session) {
         return;
     }
 
-    const winnerId = session.players.find((playerId) => playerId !== loserId);
-    session.state = 'finished';
-
-    if (winnerId) {
-        io.to(sessionId).emit('session-finished', { sessionId, winnerId, loserId, reason });
+    if (session.state !== "finished") {
+        session.state = 'finished';
+        io.to(sessionId).emit('session-finished', { sessionId, reason, winningPlayerId });
     }
 
     clearTurnTimeout(sessionId);
     gameSessions.delete(sessionId);
     broadcastSessions();
+
+    console.log(`Session ${sessionId} finished (${reason})`)
+}
+
+function removePlayerFromSession(session: GameSession, playerId: string) {
+    session.players = session.players.filter((id: string) => id !== playerId);
+    if (session.state === 'ingame') {
+        const [winningPlayerId] = session.players;
+        finishSession(session.id, 'disconnect', winningPlayerId ?? null);
+        return;
+    }
+
+    io.to(session.id).emit('player-left', {
+        playerId,
+        players: session.players,
+        state: session.state
+    });
+    broadcastSessions();
+
+    updateSessionState(session);
 }
 
 // Serve static files from dist in production
@@ -214,6 +254,11 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (session.state !== "lobby") {
+            socket.emit('error', 'Session has already started');
+            return;
+        }
+
         if (session.players.length >= session.maxPlayers) {
             socket.emit('error', 'Session is full');
             return;
@@ -221,58 +266,34 @@ io.on('connection', (socket) => {
 
         session.players.push(socket.id);
         socket.join(sessionId);
-        const state = updateSessionState(session);
 
-        // Notify all players in the session
+        /* confirm join for client */
+        socket.emit('session-joined', {
+            sessionId,
+            state: session.state
+        });
+
+        /* notify everyone else */
         io.to(sessionId).emit('player-joined', {
             playerId: socket.id,
             players: session.players,
-            state
+            state: session.state
         });
-        if (state === 'ingame') {
-            scheduleTurnTimeout(sessionId);
-        }
-        emitGameState(sessionId);
+
         broadcastSessions();
 
+
         console.log(`Player ${socket.id} joined session ${sessionId}`);
+
+        updateSessionState(session);
     });
 
     socket.on('leave-session', (sessionId: string) => {
         const session = gameSessions.get(sessionId);
         if (session) {
-            const wasInGame = session.state === 'ingame';
-
-            if (wasInGame) {
-                finishSession(sessionId, socket.id, 'disconnect');
-                socket.leave(sessionId);
-                return;
-            }
-
-            session.players = session.players.filter((id: string) => id !== socket.id);
             socket.leave(sessionId);
-            const state = updateSessionState(session);
-
-            if (session.players.length === 0) {
-                clearTurnTimeout(sessionId);
-                gameSessions.delete(sessionId);
-                console.log(`Session ${sessionId} deleted (no players)`);
-            } else {
-                io.to(sessionId).emit('player-left', {
-                    playerId: socket.id,
-                    players: session.players,
-                    state
-                });
-            }
-
-            broadcastSessions();
+            removePlayerFromSession(session, socket.id);
         }
-    });
-
-    socket.on('game-action', (data: { sessionId: string; action: GameAction }) => {
-        const { sessionId, action } = data;
-        // Broadcast the action to all players in the session
-        socket.to(sessionId).emit('game-action', { playerId: socket.id, action });
     });
 
     socket.on('place-cell', (data: { sessionId: string; x: number; y: number }) => {
@@ -332,31 +353,12 @@ io.on('connection', (socket) => {
         console.log('Player disconnected:', socket.id);
 
         // Remove player from all sessions
-        for (const [sessionId, session] of gameSessions.entries()) {
-            if (session.players.includes(socket.id)) {
-                const wasInGame = session.state === 'ingame';
-
-                if (wasInGame) {
-                    finishSession(sessionId, socket.id, 'disconnect');
-                    continue;
-                }
-
-                session.players = session.players.filter((id: string) => id !== socket.id);
-                const state = updateSessionState(session);
-
-                if (session.players.length === 0) {
-                    clearTurnTimeout(sessionId);
-                    gameSessions.delete(sessionId);
-                } else {
-                    io.to(sessionId).emit('player-left', {
-                        playerId: socket.id,
-                        players: session.players,
-                        state
-                    });
-                }
-
-                broadcastSessions();
+        for (const session of gameSessions.values()) {
+            if (!session.players.includes(socket.id)) {
+                continue;
             }
+
+            removePlayerFromSession(session, socket.id);
         }
     });
 });

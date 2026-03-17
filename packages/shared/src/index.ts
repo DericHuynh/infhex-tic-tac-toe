@@ -1,6 +1,6 @@
 export type SessionState = 'lobby' | 'ingame' | 'finished';
-export type CellOccupant = string;
-export type SessionFinishReason = 'disconnect' | 'timeout';
+export type CellOccupant = string & { _type?: "CellOccupant" };
+export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated';
 
 export interface BoardCell {
     x: number;
@@ -43,11 +43,11 @@ export interface SessionInfo {
 // Socket Event Types
 export interface ServerToClientEvents {
     'sessions-updated': (sessions: SessionInfo[]) => void;
+    'session-joined': (data: { sessionId: string; state: SessionState }) => void;
+    'session-finished': (data: { sessionId: string; winningPlayerId: string | null; reason: SessionFinishReason }) => void;
     'player-joined': (data: { playerId: string; players: string[]; state: SessionState }) => void;
     'player-left': (data: { playerId: string; players: string[]; state: SessionState }) => void;
-    'session-finished': (data: { sessionId: string; winnerId: string; loserId: string; reason: SessionFinishReason }) => void;
-    'game-state': (data: { sessionId: string; gameState: BoardState }) => void;
-    'game-action': (data: { playerId: string; action: GameAction }) => void;
+    'game-state': (data: { sessionId: string; sessionState: SessionState, gameState: BoardState }) => void;
     error: (error: string) => void;
 }
 
@@ -55,13 +55,6 @@ export interface ClientToServerEvents {
     'join-session': (sessionId: string) => void;
     'leave-session': (sessionId: string) => void;
     'place-cell': (data: { sessionId: string; x: number; y: number }) => void;
-    'game-action': (data: { sessionId: string; action: GameAction }) => void;
-}
-
-// Game Action Types (can be extended for specific games)
-export interface GameAction {
-    type: string;
-    payload?: any;
 }
 
 // Common utility types

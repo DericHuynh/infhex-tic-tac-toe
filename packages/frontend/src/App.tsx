@@ -14,6 +14,8 @@ type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner' | 'loser'
 function App() {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const sessionIdRef = useRef<string>('')
+  const inviteSessionIdRef = useRef<string | null>(new URLSearchParams(window.location.search).get('join'))
+  const inviteHandledRef = useRef(false)
   const [screenState, setScreenState] = useState<ScreenState>('lobby')
   const [sessionId, setSessionId] = useState<string>('')
   const [players, setPlayers] = useState<string[]>([])
@@ -36,6 +38,12 @@ function App() {
   const showErrorToast = (message: string) => {
     toast.error(message, {
       toastId: `error:${message}`
+    })
+  }
+
+  const showSuccessToast = (message: string) => {
+    toast.success(message, {
+      toastId: `success:${message}`
     })
   }
 
@@ -71,7 +79,7 @@ function App() {
 
   useEffect(() => {
     // Connect to the server
-    const socket = io('http://localhost:3001')
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io('http://localhost:3001')
     socketRef.current = socket
 
     socket.on('connect', () => {
@@ -79,6 +87,12 @@ function App() {
       setIsConnected(true)
       setCurrentPlayerId(socket.id ?? '')
       fetchAvailableSessions()
+
+      if (inviteSessionIdRef.current && !inviteHandledRef.current) {
+        inviteHandledRef.current = true
+        joinGame(inviteSessionIdRef.current)
+        window.history.replaceState({}, '', window.location.pathname)
+      }
     })
 
     socket.on('sessions-updated', (sessions: SessionInfo[]) => {
@@ -94,19 +108,26 @@ function App() {
       setAvailableSessions([])
     })
 
-    socket.on('player-joined', (data: { players: string[]; state: SessionState }) => {
+    socket.on('player-joined', data => {
       console.log('Player joined:', data)
       setPlayers(data.players)
       updateScreenForSessionState(data.state)
     })
 
-    socket.on('player-left', (data: { players: string[]; state: SessionState }) => {
+    socket.on('session-joined', data => {
+      console.log('Session joined:', data)
+      sessionIdRef.current = data.sessionId;
+      setSessionId(data.sessionId)
+      updateScreenForSessionState(data.state)
+    })
+
+    socket.on('player-left', data => {
       console.log('Player left:', data)
       setPlayers(data.players)
       updateScreenForSessionState(data.state)
     })
 
-    socket.on('session-finished', (data: { sessionId: string; winnerId: string; loserId: string; reason: SessionFinishReason }) => {
+    socket.on('session-finished', data => {
       console.log('Session finished:', data)
 
       if (data.sessionId !== sessionIdRef.current) {
@@ -115,30 +136,20 @@ function App() {
 
       setFinishReason(data.reason)
 
-      if (data.winnerId === socket.id) {
+      if (data.winningPlayerId === socket.id) {
         setScreenState('winner')
-        return
-      }
-
-      if (data.loserId === socket.id) {
+      } else {
         setScreenState('loser')
-        return
       }
-
-      resetToLobby()
     })
 
-    socket.on('game-state', (data: { sessionId: string; gameState: BoardState }) => {
+    socket.on('game-state', data => {
       if (data.sessionId !== sessionIdRef.current) {
         return
       }
 
+      updateScreenForSessionState(data.sessionState);
       setBoardState(data.gameState)
-    })
-
-    socket.on('game-action', (data: { playerId: string; action: any }) => {
-      console.log('Game action received:', data)
-      // Handle game actions here
     })
 
     socket.on('error', (error: string) => {
@@ -169,7 +180,6 @@ function App() {
         headers: { 'Content-Type': 'application/json' }
       })
       const data = await response.json()
-      setSessionId(data.sessionId)
       setIsHost(true)
       setBoardState({
         cells: [],
@@ -177,7 +187,7 @@ function App() {
         placementsRemaining: 0,
         currentTurnExpiresAt: null
       })
-      setScreenState('waiting')
+      setPlayers([])
       socketRef.current?.emit('join-session', data.sessionId)
     } catch (error) {
       console.error('Failed to create session:', error)
@@ -186,7 +196,6 @@ function App() {
   }
 
   const joinGame = (sessionIdToJoin: string) => {
-    setSessionId(sessionIdToJoin)
     setIsHost(false)
     setBoardState({
       cells: [],
@@ -194,8 +203,32 @@ function App() {
       placementsRemaining: 0,
       currentTurnExpiresAt: null
     })
-    setScreenState('waiting')
+    setPlayers([])
     socketRef.current?.emit('join-session', sessionIdToJoin)
+  }
+
+  const inviteFriend = async () => {
+    const inviteUrl = new URL(window.location.href)
+    inviteUrl.search = ''
+    inviteUrl.searchParams.set('join', sessionId)
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Join my Infinity Hexagonial Tik-Tak-Toe lobby',
+          text: 'Join my lobby directly with this link.',
+          url: inviteUrl.toString()
+        })
+        showSuccessToast('Invite link shared.')
+        return
+      }
+
+      await navigator.clipboard.writeText(inviteUrl.toString())
+      showSuccessToast('Invite link copied to clipboard.')
+    } catch (error) {
+      console.error('Failed to share invite link:', error)
+      showErrorToast('Failed to share invite link.')
+    }
   }
 
   const leaveGame = () => {
@@ -289,6 +322,7 @@ function App() {
             <WaitingScreen
               sessionId={sessionId}
               playerCount={players.length}
+              onInviteFriend={inviteFriend}
               onCancel={leaveGame}
             />
           </div>

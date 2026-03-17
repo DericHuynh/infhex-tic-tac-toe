@@ -63,7 +63,7 @@ function getPlayerColor(playerId: string): string {
   const palette = ['#fbbf24', '#38bdf8', '#f472b6', '#34d399', '#c084fc', '#fb7185']
   let hash = 0
   for (let index = 0; index < playerId.length; index += 1) {
-    hash = (hash * 31 + playerId.charCodeAt(index)) >>> 0
+    hash = (hash * 31 + (playerId.codePointAt(index) ?? 0)) >>> 0
   }
 
   return palette[hash % palette.length]
@@ -148,7 +148,6 @@ function formatCountdown(milliseconds: number | null): string {
 }
 
 function GameScreen({
-  sessionId,
   players,
   isHost,
   currentPlayerId,
@@ -157,7 +156,7 @@ function GameScreen({
   onLeave,
   overlay,
   interactionEnabled = true
-}: GameScreenProps) {
+}: Readonly<GameScreenProps>) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragStateRef = useRef<DragState | null>(null)
   const viewRef = useRef<ViewState>({ offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE })
