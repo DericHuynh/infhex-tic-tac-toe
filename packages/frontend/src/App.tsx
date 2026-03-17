@@ -246,7 +246,7 @@ function App() {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'Join my Infinity Hexagonial Tik-Tak-Toe lobby',
+          title: 'Join my Infinity Hexagonial Tic-Tac-Toe lobby',
           text: 'Join my lobby directly with this link.',
           url: inviteUrl.toString()
         })

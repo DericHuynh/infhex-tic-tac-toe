@@ -30,7 +30,7 @@ function LobbyScreen({
                 <br />
                 Hexagonial
                 <br />
-                Tik-Tak-Toe
+                Tic-Tac-Toe
               </h1>
               <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">
                 Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align five in a row.

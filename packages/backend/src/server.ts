@@ -15,7 +15,6 @@ import {
     SessionInfo,
     ServerToClientEvents,
     ClientToServerEvents,
-    DUMMY,
 } from '@ih3t/shared';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,12 +49,17 @@ const corsOptions: cors.CorsOptions | null = allowedOrigins.size > 0 ? {
     credentials: true
 } : null;
 
+app.on("mount", event => {
+    console.log("MOunt!");
+});
+console.log("XX!");
+
 // CORS middleware for API requests
 if (corsOptions) {
     app.use(cors(corsOptions));
 }
 
-export const server = createServer(app);
+const server = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, corsOptions ? {
     cors: corsOptions
 } : undefined);
@@ -557,13 +561,10 @@ if (process.env.NODE_ENV === 'production' && existsSync(frontendDistPath)) {
 }
 
 
-if (import.meta.env.PROD) {
-    const PORT = process.env.PORT || 3001;
-    server.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-    });
-
-}
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
 
 server.on('close', () => {
     void closeMetricLogger();

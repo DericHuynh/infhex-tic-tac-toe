@@ -11,7 +11,7 @@ export default defineConfig({
     ...VitePluginNode({
       adapter: 'express',
       appPath: './src/server.ts',
-      exportName: 'server',
+      exportName: 'app',
     })
   ],
 });
