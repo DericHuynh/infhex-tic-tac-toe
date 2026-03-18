@@ -1,5 +1,6 @@
 export const DUMMY = "Hello?";
 export type SessionState = 'lobby' | 'ingame' | 'finished';
+export type SessionParticipantRole = 'player' | 'spectator';
 export type CellOccupant = string & { _type?: "CellOccupant" };
 export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated' | 'six-in-a-row';
 
@@ -20,6 +21,7 @@ export interface BoardState {
 export interface GameSession {
     id: string;
     players: string[];
+    spectators: string[];
     maxPlayers: 2; // Fixed to 2 players
     state: SessionState;
     gameState: BoardState;
@@ -44,7 +46,7 @@ export interface SessionInfo {
 // Socket Event Types
 export interface ServerToClientEvents {
     'sessions-updated': (sessions: SessionInfo[]) => void;
-    'session-joined': (data: { sessionId: string; state: SessionState }) => void;
+    'session-joined': (data: { sessionId: string; state: SessionState; role: SessionParticipantRole; players: string[] }) => void;
     'session-finished': (data: { sessionId: string; winningPlayerId: string | null; reason: SessionFinishReason }) => void;
     'player-joined': (data: { playerId: string; players: string[]; state: SessionState }) => void;
     'player-left': (data: { playerId: string; players: string[]; state: SessionState }) => void;

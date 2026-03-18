@@ -12,6 +12,7 @@ import {
     GameSession,
     CreateSessionResponse,
     SessionFinishReason,
+    SessionParticipantRole,
     SessionInfo,
     ServerToClientEvents,
     ClientToServerEvents,
@@ -63,6 +64,7 @@ interface StoredGameSession extends GameSession {
     createdAt: number;
     startedAt: number | null;
     playerDeviceIds: Record<string, string | null>;
+    spectatorDeviceIds: Record<string, string | null>;
 }
 
 type PlayerLeaveSource = 'leave-session' | 'disconnect';
@@ -203,6 +205,19 @@ function emitGameState(sessionId: string): void {
     });
 }
 
+function emitGameStateToSocket(socket: Socket<ClientToServerEvents, ServerToClientEvents>, session: StoredGameSession): void {
+    socket.emit('game-state', {
+        sessionId: session.id,
+        sessionState: session.state,
+        gameState: {
+            cells: getBoardCells(session),
+            currentTurnPlayerId: session.gameState.currentTurnPlayerId,
+            placementsRemaining: session.gameState.placementsRemaining,
+            currentTurnExpiresAt: session.gameState.currentTurnExpiresAt
+        }
+    });
+}
+
 function clearTurnTimeout(sessionId: string): void {
     const timeout = turnTimeouts.get(sessionId);
     if (timeout) {
@@ -323,6 +338,8 @@ function finishSession(sessionId: string, reason: SessionFinishReason, winningPl
         winningPlayerId,
         players: [...session.players],
         playerDeviceIds: { ...session.playerDeviceIds },
+        spectators: [...session.spectators],
+        spectatorDeviceIds: { ...session.spectatorDeviceIds },
         boardState: finalBoardState,
         createdAt: new Date(session.createdAt).toISOString(),
         startedAt: session.startedAt === null ? null : new Date(session.startedAt).toISOString(),
@@ -368,6 +385,21 @@ function removePlayerFromSession(session: StoredGameSession, playerId: string, s
     updateSessionState(session);
 }
 
+function removeSpectatorFromSession(session: StoredGameSession, spectatorId: string, source: PlayerLeaveSource) {
+    const spectatorDeviceId = session.spectatorDeviceIds[spectatorId] ?? null;
+    session.spectators = session.spectators.filter((id: string) => id !== spectatorId);
+    delete session.spectatorDeviceIds[spectatorId];
+
+    logMetric('spectator-left', {
+        sessionId: session.id,
+        spectatorId,
+        deviceId: spectatorDeviceId,
+        source,
+        sessionState: session.state,
+        remainingSpectators: [...session.spectators]
+    });
+}
+
 // Serve the built frontend from the backend in production containers.
 if (process.env.NODE_ENV === 'production' && existsSync(frontendDistPath)) {
     app.use(express.static(frontendDistPath));
@@ -385,11 +417,13 @@ app.post('/api/sessions', express.json(), (req, res) => {
     const session: StoredGameSession = {
         id: sessionId,
         players: [],
+        spectators: [],
         maxPlayers: 2,
         state: 'lobby',
         createdAt,
         startedAt: null,
         playerDeviceIds: {},
+        spectatorDeviceIds: {},
         gameState: {
             cells: [],
             currentTurnPlayerId: null,
@@ -427,52 +461,105 @@ io.on('connection', (socket) => {
             return;
         }
 
-        if (session.state !== "lobby") {
-            socket.emit('error', 'Session has already started');
+        if (session.players.includes(socket.id)) {
+            socket.join(sessionId);
+            socket.emit('session-joined', {
+                sessionId,
+                state: session.state,
+                role: 'player',
+                players: [...session.players]
+            });
+
+            if (session.state === 'ingame') {
+                emitGameStateToSocket(socket, session);
+            }
             return;
         }
 
-        if (session.players.length >= session.maxPlayers) {
-            socket.emit('error', 'Session is full');
+        if (session.spectators.includes(socket.id)) {
+            socket.join(sessionId);
+            socket.emit('session-joined', {
+                sessionId,
+                state: session.state,
+                role: 'spectator',
+                players: [...session.players]
+            });
+
+            if (session.state === 'ingame') {
+                emitGameStateToSocket(socket, session);
+            }
             return;
         }
 
-        session.players.push(socket.id);
-        session.playerDeviceIds[socket.id] = clientInfo.deviceId;
+        let role: SessionParticipantRole;
+        if (session.state === 'lobby') {
+            if (session.players.length >= session.maxPlayers) {
+                socket.emit('error', 'Session is full');
+                return;
+            }
+
+            session.players.push(socket.id);
+            session.playerDeviceIds[socket.id] = clientInfo.deviceId;
+            role = 'player';
+        } else if (session.state === 'ingame') {
+            session.spectators.push(socket.id);
+            session.spectatorDeviceIds[socket.id] = clientInfo.deviceId;
+            role = 'spectator';
+        } else {
+            socket.emit('error', 'Session has already finished');
+            return;
+        }
+
         socket.join(sessionId);
 
         /* confirm join for client */
         socket.emit('session-joined', {
             sessionId,
-            state: session.state
+            state: session.state,
+            role,
+            players: [...session.players]
         });
 
-        /* notify everyone else */
-        io.to(sessionId).emit('player-joined', {
-            playerId: socket.id,
-            players: session.players,
-            state: session.state
-        });
+        if (role === 'player') {
+            /* notify everyone else */
+            io.to(sessionId).emit('player-joined', {
+                playerId: socket.id,
+                players: session.players,
+                state: session.state
+            });
+        } else {
+            emitGameStateToSocket(socket, session);
+        }
 
         broadcastSessions();
 
 
-        console.log(`Player ${socket.id} joined session ${sessionId}`);
-        logMetric('game-joined', {
+        console.log(`${role === 'player' ? 'Player' : 'Spectator'} ${socket.id} joined session ${sessionId}`);
+        logMetric(role === 'player' ? 'game-joined' : 'spectator-joined', {
             sessionId,
-            playerId: socket.id,
+            [`${role}Id`]: socket.id,
             players: [...session.players],
+            spectators: [...session.spectators],
             client: clientInfo
         });
 
-        updateSessionState(session);
+        if (role === 'player') {
+            updateSessionState(session);
+        }
     });
 
     socket.on('leave-session', (sessionId: string) => {
         const session = gameSessions.get(sessionId);
         if (session) {
             socket.leave(sessionId);
-            removePlayerFromSession(session, socket.id, 'leave-session');
+            if (session.players.includes(socket.id)) {
+                removePlayerFromSession(session, socket.id, 'leave-session');
+                return;
+            }
+
+            if (session.spectators.includes(socket.id)) {
+                removeSpectatorFromSession(session, socket.id, 'leave-session');
+            }
         }
     });
 
@@ -540,11 +627,14 @@ io.on('connection', (socket) => {
 
         // Remove player from all sessions
         for (const session of gameSessions.values()) {
-            if (!session.players.includes(socket.id)) {
+            if (session.players.includes(socket.id)) {
+                removePlayerFromSession(session, socket.id, 'disconnect');
                 continue;
             }
 
-            removePlayerFromSession(session, socket.id, 'disconnect');
+            if (session.spectators.includes(socket.id)) {
+                removeSpectatorFromSession(session, socket.id, 'disconnect');
+            }
         }
     });
 });

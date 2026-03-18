@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { ToastContainer, toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-import { BoardState, ServerToClientEvents, ClientToServerEvents, SessionFinishReason, SessionInfo, SessionState } from '@ih3t/shared'
+import { BoardState, ServerToClientEvents, ClientToServerEvents, SessionFinishReason, SessionInfo, SessionParticipantRole, SessionState } from '@ih3t/shared'
 import GameScreen from './components/GameScreen'
 import LobbyScreen from './components/LobbyScreen'
 import WaitingScreen from './components/WaitingScreen'
 import LoserScreen from './components/LoserScreen'
+import SpectatorFinishedScreen from './components/SpectatorFinishedScreen'
 import WinnerScreen from './components/WinnerScreen'
 import { getOrCreateDeviceId } from './deviceId'
 
-type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner' | 'loser'
+type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner' | 'loser' | 'spectator-finished'
 
 function getApiBaseUrl() {
   const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -29,6 +30,7 @@ function App() {
   const deviceIdRef = useRef<string>(getOrCreateDeviceId())
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const sessionIdRef = useRef<string>('')
+  const participantRoleRef = useRef<SessionParticipantRole>('player')
   const inviteSessionIdRef = useRef<string | null>(new URLSearchParams(window.location.search).get('join'))
   const inviteHandledRef = useRef(false)
   const [screenState, setScreenState] = useState<ScreenState>('lobby')
@@ -38,6 +40,7 @@ function App() {
   const [currentPlayerId, setCurrentPlayerId] = useState<string>('')
   const [availableSessions, setAvailableSessions] = useState<SessionInfo[]>([])
   const [isHost, setIsHost] = useState(false)
+  const [participantRole, setParticipantRole] = useState<SessionParticipantRole>('player')
   const [finishReason, setFinishReason] = useState<SessionFinishReason | null>(null)
   const [boardState, setBoardState] = useState<BoardState>({
     cells: [],
@@ -68,6 +71,8 @@ function App() {
     setSessionId('')
     setPlayers([])
     setIsHost(false)
+    participantRoleRef.current = 'player'
+    setParticipantRole('player')
     setFinishReason(null)
     setBoardState({
       cells: [],
@@ -93,6 +98,10 @@ function App() {
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
+
+  useEffect(() => {
+    participantRoleRef.current = participantRole
+  }, [participantRole])
 
   useEffect(() => {
     // Connect to the server
@@ -140,6 +149,9 @@ function App() {
       console.log('Session joined:', data)
       sessionIdRef.current = data.sessionId;
       setSessionId(data.sessionId)
+      participantRoleRef.current = data.role
+      setParticipantRole(data.role)
+      setPlayers(data.players)
       updateScreenForSessionState(data.state)
     })
 
@@ -158,7 +170,9 @@ function App() {
 
       setFinishReason(data.reason)
 
-      if (data.winningPlayerId === socket.id) {
+      if (participantRoleRef.current === 'spectator') {
+        setScreenState('spectator-finished')
+      } else if (data.winningPlayerId === socket.id) {
         setScreenState('winner')
       } else {
         setScreenState('loser')
@@ -212,6 +226,8 @@ function App() {
       })
       const data = await response.json()
       setIsHost(true)
+      participantRoleRef.current = 'player'
+      setParticipantRole('player')
       setBoardState({
         cells: [],
         currentTurnPlayerId: null,
@@ -228,6 +244,8 @@ function App() {
 
   const joinGame = (sessionIdToJoin: string) => {
     setIsHost(false)
+    participantRoleRef.current = 'player'
+    setParticipantRole('player')
     setBoardState({
       cells: [],
       currentTurnPlayerId: null,
@@ -284,6 +302,7 @@ function App() {
         sessionId={sessionId}
         players={players}
         isHost={isHost}
+        participantRole={participantRole}
         currentPlayerId={currentPlayerId}
         boardState={boardState}
         onPlaceCell={(x, y) => socketRef.current?.emit('place-cell', { sessionId, x, y })}
@@ -298,6 +317,7 @@ function App() {
         sessionId={sessionId}
         players={players}
         isHost={isHost}
+        participantRole={participantRole}
         currentPlayerId={currentPlayerId}
         boardState={boardState}
         onPlaceCell={() => { }}
@@ -314,12 +334,30 @@ function App() {
         sessionId={sessionId}
         players={players}
         isHost={isHost}
+        participantRole={participantRole}
         currentPlayerId={currentPlayerId}
         boardState={boardState}
         onPlaceCell={() => { }}
         onLeave={leaveGame}
         interactionEnabled={false}
         overlay={<LoserScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+      />
+    )
+  }
+
+  if (screenState === 'spectator-finished') {
+    screen = (
+      <GameScreen
+        sessionId={sessionId}
+        players={players}
+        isHost={isHost}
+        participantRole={participantRole}
+        currentPlayerId={currentPlayerId}
+        boardState={boardState}
+        onPlaceCell={() => { }}
+        onLeave={leaveGame}
+        interactionEnabled={false}
+        overlay={<SpectatorFinishedScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
       />
     )
   }

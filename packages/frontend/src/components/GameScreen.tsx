@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BoardState } from '@ih3t/shared'
+import type { BoardState, SessionParticipantRole } from '@ih3t/shared'
 
 const HEX_RADIUS = 8
 const TURN_TIMEOUT_MS = 45_000
@@ -60,6 +60,7 @@ interface GameScreenProps {
   sessionId: string
   players: string[]
   isHost: boolean
+  participantRole: SessionParticipantRole
   currentPlayerId: string
   boardState: BoardState
   onPlaceCell: (x: number, y: number) => void
@@ -82,6 +83,19 @@ function getPlayerColor(players: string[], playerId: string): string {
 
 function getCellKey(x: number, y: number): string {
   return `${x},${y}`
+}
+
+function getPlayerLabel(players: string[], playerId: string | null): string {
+  if (!playerId) {
+    return 'Waiting for a player'
+  }
+
+  const playerIndex = players.indexOf(playerId)
+  if (playerIndex === -1) {
+    return 'A player'
+  }
+
+  return `Player ${playerIndex + 1}`
 }
 
 function hexDistance(a: HexCell, b: HexCell): number {
@@ -194,6 +208,7 @@ function getTouchCenter(touches: TouchList) {
 function GameScreen({
   players,
   isHost,
+  participantRole,
   currentPlayerId,
   boardState,
   onPlaceCell,
@@ -256,12 +271,21 @@ function GameScreen({
     return new Set(renderableCells.map((cell) => cell.key))
   }, [renderableCells])
 
+  const isSpectator = participantRole === 'spectator'
   const ownColor = getPlayerColor(players, currentPlayerId)
   const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
-  const turnHeadline = isOwnTurn ? 'Your turn' : 'Opponents turn'
-  const turnDetail = isOwnTurn
-    ? `Place ${boardState.placementsRemaining} more ${boardState.placementsRemaining === 1 ? 'cell' : 'cells'}.`
-    : `Waiting for the other player to finish ${boardState.placementsRemaining} ${boardState.placementsRemaining === 1 ? 'move' : 'moves'}.`
+  const canPlaceCell = interactionEnabled && !isSpectator && isOwnTurn
+  const activePlayerLabel = getPlayerLabel(players, boardState.currentTurnPlayerId)
+  const turnHeadline = isSpectator
+    ? 'Spectator mode'
+    : isOwnTurn
+      ? 'Your turn'
+      : 'Opponents turn'
+  const turnDetail = isSpectator
+    ? `${activePlayerLabel} is playing. You can pan and zoom, but only active players can place cells.`
+    : isOwnTurn
+      ? `Place ${boardState.placementsRemaining} more ${boardState.placementsRemaining === 1 ? 'cell' : 'cells'}.`
+      : `Waiting for the other player to finish ${boardState.placementsRemaining} ${boardState.placementsRemaining === 1 ? 'move' : 'moves'}.`
 
   latestDataRef.current = {
     boardState,
@@ -346,7 +370,7 @@ function GameScreen({
     }
 
     const hoveredCell = hoveredCellRef.current
-    if (hoveredCell) {
+    if (hoveredCell && canPlaceCell) {
       const hoveredKey = getCellKey(hoveredCell.x, hoveredCell.y)
       if (latestData.renderableCellSet.has(hoveredKey) && !latestData.cellMap.has(hoveredKey)) {
         const point = axialToUnitPoint(hoveredCell.x, hoveredCell.y)
@@ -435,7 +459,7 @@ function GameScreen({
     }
 
     const cellKey = getCellKey(targetCell.x, targetCell.y)
-    if (isOwnTurn && renderableCellSet.has(cellKey) && !cellMap.has(cellKey)) {
+    if (canPlaceCell && renderableCellSet.has(cellKey) && !cellMap.has(cellKey)) {
       onPlaceCell(targetCell.x, targetCell.y)
     }
   }
@@ -499,7 +523,7 @@ function GameScreen({
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 h-full w-full touch-none select-none ${interactionEnabled
-          ? (isOwnTurn ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed')
+          ? (canPlaceCell || isSpectator ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed')
           : 'cursor-default'
           }`}
         onMouseDown={(event) => {
@@ -520,7 +544,7 @@ function GameScreen({
             return
           }
 
-          const nextCell = screenToCell(event.clientX, event.clientY)
+          const nextCell = canPlaceCell ? screenToCell(event.clientX, event.clientY) : null
           if (!sameCell(hoveredCellRef.current, nextCell)) {
             hoveredCellRef.current = nextCell
             scheduleDraw()
@@ -594,7 +618,7 @@ function GameScreen({
           if (event.touches.length === 1) {
             suppressTouchPlacementRef.current = false
             const touch = event.touches[0]
-            hoveredCellRef.current = screenToCell(touch.clientX, touch.clientY)
+            hoveredCellRef.current = canPlaceCell ? screenToCell(touch.clientX, touch.clientY) : null
             dragStateRef.current = {
               startX: touch.clientX,
               startY: touch.clientY,
@@ -662,7 +686,7 @@ function GameScreen({
             return
           }
 
-          const nextCell = screenToCell(touch.clientX, touch.clientY)
+          const nextCell = canPlaceCell ? screenToCell(touch.clientX, touch.clientY) : null
           if (!sameCell(hoveredCellRef.current, nextCell)) {
             hoveredCellRef.current = nextCell
           }
@@ -714,7 +738,7 @@ function GameScreen({
 
           if (event.touches.length === 1) {
             const touch = event.touches[0]
-            hoveredCellRef.current = screenToCell(touch.clientX, touch.clientY)
+            hoveredCellRef.current = canPlaceCell ? screenToCell(touch.clientX, touch.clientY) : null
             dragStateRef.current = {
               startX: touch.clientX,
               startY: touch.clientY,
@@ -754,11 +778,13 @@ function GameScreen({
             <div className="absolute left-3 right-3 top-3 flex justify-center md:left-0 md:right-0">
               <div className="pointer-events-none shadow-xxl w-full max-w-md rounded-md bg-slate-800/95 px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <span className={`h-2.5 w-2.5 rounded-full ${isOwnTurn ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  <span className={`h-2.5 w-2.5 rounded-full ${canPlaceCell ? 'bg-emerald-500' : isSpectator ? 'bg-sky-400' : 'bg-slate-400'}`} />
                   <div className="min-w-0 flex-1 spacing">
-                    <div className={`text-sm font-bold uppercase tracking-[0.16em] ${isOwnTurn
+                    <div className={`text-sm font-bold uppercase tracking-[0.16em] ${canPlaceCell
                       ? 'bg-emerald-400/16 text-emerald-500'
-                      : 'bg-white/8 text-slate-500'
+                      : isSpectator
+                        ? 'bg-sky-400/16 text-sky-300'
+                        : 'bg-white/8 text-slate-500'
                       }`}>
                       {turnHeadline}
                     </div>
@@ -771,7 +797,7 @@ function GameScreen({
                     {Array.from({ length: 2 }, (_, index) => {
                       let color;
                       if (index >= 2 - boardState.placementsRemaining) {
-                        color = isOwnTurn ? 'bg-emerald-500' : 'bg-white/90'
+                        color = canPlaceCell ? 'bg-emerald-500' : isSpectator ? 'bg-sky-300' : 'bg-white/90'
                       } else {
                         color = 'bg-white/40'
                       }
@@ -838,7 +864,7 @@ function GameScreen({
               <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tic-Tac-Toe</h1>
               <div className="mt-2 text-sm text-slate-300">
                 Connect 6 hexagons in a row.<br />
-                Tap to place, drag to pan, pinch to zoom.
+                {isSpectator ? 'Drag to pan and pinch to zoom while the players battle it out.' : 'Tap to place, drag to pan, pinch to zoom.'}
               </div>
               <div className="mt-4 text-sm grid grid-cols-2 md:grid-cols-1 gap-4">
                 <div className="border-l border-white/18 pl-3">
@@ -848,14 +874,18 @@ function GameScreen({
                 </div>
 
                 <div className="border-l border-white/18 pl-3">
-                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
-                  <div className="mt-1 flex items-center gap-2.5 text-white">
-                    <span>{ownColor}</span>
-                    <span
-                      className="h-3.5 w-3.5 rounded-full border border-white/20"
-                      style={{ backgroundColor: ownColor }}
-                    />
-                  </div>
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{isSpectator ? 'Viewing Mode' : 'Your Color'}</div>
+                  {isSpectator ? (
+                    <div className="mt-1 text-white">Read-only spectator</div>
+                  ) : (
+                    <div className="mt-1 flex items-center gap-2.5 text-white">
+                      <span>{ownColor}</span>
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-white/20"
+                        style={{ backgroundColor: ownColor }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* <div className="border-l border-white/18 pl-3">
