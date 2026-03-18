@@ -43,6 +43,31 @@ export interface SessionInfo {
     canJoin: boolean; // Whether the session can accept new players
 }
 
+export interface GameMove {
+    moveNumber: number;
+    playerId: string;
+    x: number;
+    y: number;
+    timestamp: number;
+}
+
+export interface FinishedGameSummary {
+    id: string;
+    sessionId: string;
+    players: string[];
+    winningPlayerId: string | null;
+    reason: SessionFinishReason;
+    moveCount: number;
+    createdAt: number;
+    startedAt: number;
+    finishedAt: number;
+    gameDurationMs: number;
+}
+
+export interface FinishedGameRecord extends FinishedGameSummary {
+    moves: GameMove[];
+}
+
 // Socket Event Types
 export interface ServerToClientEvents {
     'sessions-updated': (sessions: SessionInfo[]) => void;

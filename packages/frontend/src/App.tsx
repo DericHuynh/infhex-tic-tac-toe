@@ -2,7 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { ToastContainer, toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-import { BoardState, ServerToClientEvents, ClientToServerEvents, SessionFinishReason, SessionInfo, SessionParticipantRole, SessionState } from '@ih3t/shared'
+import {
+  BoardState,
+  ClientToServerEvents,
+  FinishedGameRecord,
+  FinishedGameSummary,
+  ServerToClientEvents,
+  SessionFinishReason,
+  SessionInfo,
+  SessionParticipantRole,
+  SessionState
+} from '@ih3t/shared'
+import FinishedGameReviewScreen from './components/FinishedGameReviewScreen'
+import FinishedGamesScreen from './components/FinishedGamesScreen'
 import GameScreen from './components/GameScreen'
 import LobbyScreen from './components/LobbyScreen'
 import WaitingScreen from './components/WaitingScreen'
@@ -12,6 +24,10 @@ import WinnerScreen from './components/WinnerScreen'
 import { getOrCreateDeviceId } from './deviceId'
 
 type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner' | 'loser' | 'spectator-finished'
+type AppRoute =
+  | { page: 'live' }
+  | { page: 'finished-games' }
+  | { page: 'finished-game'; gameId: string }
 
 function getApiBaseUrl() {
   const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -26,6 +42,36 @@ function getSocketUrl() {
   return import.meta.env.VITE_SOCKET_URL ?? getApiBaseUrl()
 }
 
+function parseRoute(pathname: string): AppRoute {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+
+  if (normalizedPath === '/games') {
+    return { page: 'finished-games' }
+  }
+
+  const gameMatch = normalizedPath.match(/^\/games\/([^/]+)$/)
+  if (gameMatch) {
+    return {
+      page: 'finished-game',
+      gameId: decodeURIComponent(gameMatch[1])
+    }
+  }
+
+  return { page: 'live' }
+}
+
+function buildRoutePath(route: AppRoute) {
+  if (route.page === 'finished-games') {
+    return '/games'
+  }
+
+  if (route.page === 'finished-game') {
+    return `/games/${encodeURIComponent(route.gameId)}`
+  }
+
+  return '/'
+}
+
 function App() {
   const deviceIdRef = useRef<string>(getOrCreateDeviceId())
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
@@ -33,6 +79,7 @@ function App() {
   const participantRoleRef = useRef<SessionParticipantRole>('player')
   const inviteSessionIdRef = useRef<string | null>(new URLSearchParams(window.location.search).get('join'))
   const inviteHandledRef = useRef(false)
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location.pathname))
   const [screenState, setScreenState] = useState<ScreenState>('lobby')
   const [sessionId, setSessionId] = useState<string>('')
   const [players, setPlayers] = useState<string[]>([])
@@ -47,8 +94,25 @@ function App() {
     placementsRemaining: 0,
     currentTurnExpiresAt: null
   })
+  const [finishedGames, setFinishedGames] = useState<FinishedGameSummary[]>([])
+  const [isFinishedGamesLoading, setIsFinishedGamesLoading] = useState(false)
+  const [finishedGamesError, setFinishedGamesError] = useState<string | null>(null)
+  const [selectedFinishedGame, setSelectedFinishedGame] = useState<FinishedGameRecord | null>(null)
+  const [isSelectedFinishedGameLoading, setIsSelectedFinishedGameLoading] = useState(false)
+  const [selectedFinishedGameError, setSelectedFinishedGameError] = useState<string | null>(null)
   const apiBaseUrlRef = useRef<string>(getApiBaseUrl())
   const socketUrlRef = useRef<string>(getSocketUrl())
+
+  const isLiveRoute = route.page === 'live'
+
+  const navigateTo = (nextRoute: AppRoute) => {
+    const nextPath = buildRoutePath(nextRoute)
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath)
+    }
+
+    setRoute(nextRoute)
+  }
 
   const syncAvailableSessions = (sessions: SessionInfo[]) => {
     setAvailableSessions(sessions.filter((session) => session.canJoin))
@@ -66,6 +130,78 @@ function App() {
     })
   }
 
+  const fetchAvailableSessions = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrlRef.current}/api/sessions`, {
+        credentials: 'include',
+        headers: {
+          'X-Device-Id': deviceIdRef.current
+        }
+      })
+      const sessions: SessionInfo[] = await response.json()
+      syncAvailableSessions(sessions)
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error)
+      showErrorToast('Failed to fetch available sessions.')
+    }
+  }
+
+  const fetchFinishedGames = async () => {
+    setIsFinishedGamesLoading(true)
+    setFinishedGamesError(null)
+
+    try {
+      const response = await fetch(`${apiBaseUrlRef.current}/api/finished-games`, {
+        credentials: 'include',
+        headers: {
+          'X-Device-Id': deviceIdRef.current
+        }
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error ?? 'Failed to load finished games.')
+      }
+
+      const data = await response.json() as { games: FinishedGameSummary[] }
+      setFinishedGames(data.games)
+    } catch (error) {
+      console.error('Failed to fetch finished games:', error)
+      setFinishedGamesError(error instanceof Error ? error.message : 'Failed to load finished games.')
+    } finally {
+      setIsFinishedGamesLoading(false)
+    }
+  }
+
+  const fetchFinishedGame = async (gameId: string) => {
+    setIsSelectedFinishedGameLoading(true)
+    setSelectedFinishedGameError(null)
+    setSelectedFinishedGame(null)
+
+    try {
+      const response = await fetch(`${apiBaseUrlRef.current}/api/finished-games/${encodeURIComponent(gameId)}`, {
+        credentials: 'include',
+        headers: {
+          'X-Device-Id': deviceIdRef.current
+        }
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error ?? 'Failed to load finished game replay.')
+      }
+
+      const data = await response.json() as FinishedGameRecord
+      setSelectedFinishedGame(data)
+    } catch (error) {
+      console.error('Failed to fetch finished game:', error)
+      setSelectedFinishedGame(null)
+      setSelectedFinishedGameError(error instanceof Error ? error.message : 'Failed to load finished game replay.')
+    } finally {
+      setIsSelectedFinishedGameLoading(false)
+    }
+  }
+
   const resetToLobby = () => {
     setSessionId('')
     setPlayers([])
@@ -79,6 +215,7 @@ function App() {
       currentTurnExpiresAt: null
     })
     setScreenState('lobby')
+    navigateTo({ page: 'live' })
     fetchAvailableSessions()
   }
 
@@ -94,6 +231,15 @@ function App() {
   }
 
   useEffect(() => {
+    const handlePopState = () => {
+      setRoute(parseRoute(window.location.pathname))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
 
@@ -102,7 +248,23 @@ function App() {
   }, [participantRole])
 
   useEffect(() => {
-    // Connect to the server
+    if (route.page === 'finished-games') {
+      void fetchFinishedGames()
+      return
+    }
+
+    if (route.page === 'finished-game') {
+      void fetchFinishedGame(route.gameId)
+    }
+  }, [route])
+
+  useEffect(() => {
+    if (!isLiveRoute) {
+      return
+    }
+
+    let shouldHandleDisconnect = true
+
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketUrlRef.current, {
       auth: {
         deviceId: deviceIdRef.current
@@ -129,6 +291,10 @@ function App() {
     })
 
     socket.on('disconnect', () => {
+      if (!shouldHandleDisconnect) {
+        return
+      }
+
       console.log('Disconnected from server')
       setIsConnected(false)
       setCurrentPlayerId('')
@@ -145,7 +311,7 @@ function App() {
 
     socket.on('session-joined', data => {
       console.log('Session joined:', data)
-      sessionIdRef.current = data.sessionId;
+      sessionIdRef.current = data.sessionId
       setSessionId(data.sessionId)
       participantRoleRef.current = data.role
       setParticipantRole(data.role)
@@ -182,7 +348,7 @@ function App() {
         return
       }
 
-      updateScreenForSessionState(data.sessionState);
+      updateScreenForSessionState(data.sessionState)
       setBoardState(data.gameState)
     })
 
@@ -192,25 +358,14 @@ function App() {
     })
 
     return () => {
+      shouldHandleDisconnect = false
+      socket.removeAllListeners()
       socket.disconnect()
+      socketRef.current = null
+      setIsConnected(false)
+      setCurrentPlayerId('')
     }
-  }, [])
-
-  const fetchAvailableSessions = async () => {
-    try {
-      const response = await fetch(`${apiBaseUrlRef.current}/api/sessions`, {
-        credentials: 'include',
-        headers: {
-          'X-Device-Id': deviceIdRef.current
-        }
-      })
-      const sessions: SessionInfo[] = await response.json()
-      syncAvailableSessions(sessions)
-    } catch (error) {
-      console.error('Failed to fetch sessions:', error)
-      showErrorToast('Failed to fetch available sessions.')
-    }
-  }
+  }, [isLiveRoute])
 
   const hostGame = async () => {
     try {
@@ -283,82 +438,108 @@ function App() {
     }
   }
 
-  let screen = (
-    <LobbyScreen
-      isConnected={isConnected}
-      availableSessions={availableSessions}
-      onHostGame={hostGame}
-      onJoinGame={joinGame}
-    />
-  )
+  let screen = null
 
-  if (screenState === 'playing') {
+  if (route.page === 'finished-games') {
     screen = (
-      <GameScreen
-        players={players}
-        participantRole={participantRole}
-        currentPlayerId={currentPlayerId}
-        boardState={boardState}
-        onPlaceCell={(x, y) => socketRef.current?.emit('place-cell', { sessionId, x, y })}
-        onLeave={leaveGame}
+      <FinishedGamesScreen
+        games={finishedGames}
+        isLoading={isFinishedGamesLoading}
+        errorMessage={finishedGamesError}
+        onBack={() => navigateTo({ page: 'live' })}
+        onOpenGame={(gameId) => navigateTo({ page: 'finished-game', gameId })}
+        onRefresh={fetchFinishedGames}
       />
     )
-  }
-
-  if (screenState === 'winner') {
+  } else if (route.page === 'finished-game') {
     screen = (
-      <GameScreen
-        players={players}
-        participantRole={participantRole}
-        currentPlayerId={currentPlayerId}
-        boardState={boardState}
-        onPlaceCell={() => { }}
-        onLeave={leaveGame}
-        interactionEnabled={false}
-        overlay={<WinnerScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+      <FinishedGameReviewScreen
+        game={selectedFinishedGame}
+        isLoading={isSelectedFinishedGameLoading}
+        errorMessage={selectedFinishedGameError}
+        onBack={() => navigateTo({ page: 'finished-games' })}
+        onRetry={() => fetchFinishedGame(route.gameId)}
       />
     )
-  }
-
-  if (screenState === 'loser') {
+  } else {
     screen = (
-      <GameScreen
-        players={players}
-        participantRole={participantRole}
-        currentPlayerId={currentPlayerId}
-        boardState={boardState}
-        onPlaceCell={() => { }}
-        onLeave={leaveGame}
-        interactionEnabled={false}
-        overlay={<LoserScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+      <LobbyScreen
+        isConnected={isConnected}
+        availableSessions={availableSessions}
+        onHostGame={hostGame}
+        onJoinGame={joinGame}
+        onViewFinishedGames={() => navigateTo({ page: 'finished-games' })}
       />
     )
-  }
 
-  if (screenState === 'spectator-finished') {
-    screen = (
-      <GameScreen
-        players={players}
-        participantRole={participantRole}
-        currentPlayerId={currentPlayerId}
-        boardState={boardState}
-        onPlaceCell={() => { }}
-        onLeave={leaveGame}
-        interactionEnabled={false}
-        overlay={<SpectatorFinishedScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
-      />
-    )
-  }
+    if (screenState === 'playing') {
+      screen = (
+        <GameScreen
+          players={players}
+          participantRole={participantRole}
+          currentPlayerId={currentPlayerId}
+          boardState={boardState}
+          onPlaceCell={(x, y) => socketRef.current?.emit('place-cell', { sessionId, x, y })}
+          onLeave={leaveGame}
+        />
+      )
+    }
 
-  if (screenState === 'waiting') {
-    screen = (
-      <WaitingScreen
-        sessionId={sessionId}
-        playerCount={players.length}
-        onInviteFriend={inviteFriend}
-        onCancel={leaveGame}
-      />
-    )
+    if (screenState === 'winner') {
+      screen = (
+        <GameScreen
+          players={players}
+          participantRole={participantRole}
+          currentPlayerId={currentPlayerId}
+          boardState={boardState}
+          onPlaceCell={() => { }}
+          onLeave={leaveGame}
+          interactionEnabled={false}
+          overlay={<WinnerScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+        />
+      )
+    }
+
+    if (screenState === 'loser') {
+      screen = (
+        <GameScreen
+          players={players}
+          participantRole={participantRole}
+          currentPlayerId={currentPlayerId}
+          boardState={boardState}
+          onPlaceCell={() => { }}
+          onLeave={leaveGame}
+          interactionEnabled={false}
+          overlay={<LoserScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+        />
+      )
+    }
+
+    if (screenState === 'spectator-finished') {
+      screen = (
+        <GameScreen
+          players={players}
+          participantRole={participantRole}
+          currentPlayerId={currentPlayerId}
+          boardState={boardState}
+          onPlaceCell={() => { }}
+          onLeave={leaveGame}
+          interactionEnabled={false}
+          overlay={<SpectatorFinishedScreen reason={finishReason} onReturnToLobby={resetToLobby} />}
+        />
+      )
+    }
+
+    if (screenState === 'waiting') {
+      screen = (
+        <WaitingScreen
+          sessionId={sessionId}
+          playerCount={players.length}
+          onInviteFriend={inviteFriend}
+          onCancel={leaveGame}
+        />
+      )
+    }
   }
 
   return (

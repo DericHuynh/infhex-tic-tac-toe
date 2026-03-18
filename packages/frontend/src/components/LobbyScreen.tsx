@@ -5,13 +5,15 @@ interface LobbyScreenProps {
   availableSessions: SessionInfo[]
   onHostGame: () => void
   onJoinGame: (sessionId: string) => void
+  onViewFinishedGames: () => void
 }
 
 function LobbyScreen({
   isConnected,
   availableSessions,
   onHostGame,
-  onJoinGame
+  onJoinGame,
+  onViewFinishedGames
 }: LobbyScreenProps) {
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
@@ -46,6 +48,12 @@ function LobbyScreen({
                     }`}
                 >
                   Host Match
+                </button>
+                <button
+                  onClick={onViewFinishedGames}
+                  className="rounded-full border border-white/20 bg-white/10 px-7 py-3 text-base font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-white/16"
+                >
+                  Review Matches
                 </button>
                 {!isConnected && (
                   <div className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">

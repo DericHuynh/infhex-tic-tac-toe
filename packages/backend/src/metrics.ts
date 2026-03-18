@@ -1,5 +1,5 @@
-import './env.js';
-import { MongoClient, type Collection, type Document } from 'mongodb';
+import type { Collection, Document } from 'mongodb';
+import { getMongoDatabase } from './mongo';
 
 type MetricDetails = Record<string, unknown>;
 
@@ -9,27 +9,22 @@ interface MetricDocument extends Document {
     details: MetricDetails,
 }
 
-const mongoUri = process.env.MONGODB_URI ?? null;
 const mongoDbName = process.env.MONGODB_DB_NAME ?? 'ih3t';
 const mongoCollectionName = process.env.MONGODB_METRICS_COLLECTION ?? 'metrics';
 
-let mongoClient: MongoClient | null = null;
 let collectionPromise: Promise<Collection<MetricDocument> | null> | null = null;
 
 async function getMetricsCollection(): Promise<Collection<MetricDocument> | null> {
-    if (!mongoUri) {
-        return null;
-    }
-
     if (collectionPromise !== null) {
         return collectionPromise;
     }
 
     collectionPromise = (async () => {
-        mongoClient = new MongoClient(mongoUri);
-        await mongoClient.connect();
+        const database = await getMongoDatabase();
+        if (!database) {
+            return null;
+        }
 
-        const database = mongoClient.db(mongoDbName);
         const collection = database.collection<MetricDocument>(mongoCollectionName);
 
         await collection.createIndex({ timestamp: -1 });
@@ -47,7 +42,6 @@ async function getMetricsCollection(): Promise<Collection<MetricDocument> | null
         return collection;
     })().catch((error: unknown) => {
         collectionPromise = null;
-        mongoClient = null;
 
         console.error(JSON.stringify({
             type: 'metric',
@@ -92,16 +86,4 @@ export function logMetric(event: string, details: MetricDetails): void {
 
     console.log(JSON.stringify(document));
     void persistMetric(document);
-}
-
-export async function closeMetricLogger(): Promise<void> {
-    const client = mongoClient;
-    mongoClient = null;
-    collectionPromise = null;
-
-    if (!client) {
-        return;
-    }
-
-    await client.close();
 }

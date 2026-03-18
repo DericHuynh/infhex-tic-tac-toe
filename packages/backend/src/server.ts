@@ -2,13 +2,24 @@ import './env';
 import express, { type Request } from 'express';
 import cors from 'cors';
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { Server, type Socket } from 'socket.io';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { closeMetricLogger, logMetric } from './metrics';
+import { logMetric } from './metrics';
+import { closeMongoConnection } from './mongo';
+import {
+    appendGameMove,
+    createGameHistory,
+    finalizeGameHistory,
+    getFinishedGame,
+    listFinishedGames,
+    startGameHistory,
+} from './gameHistory';
 import {
     BoardCell,
+    GameMove,
     GameSession,
     CreateSessionResponse,
     SessionFinishReason,
@@ -61,8 +72,10 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, corsOp
 } : undefined);
 
 interface StoredGameSession extends GameSession {
+    historyId: string;
     createdAt: number;
     startedAt: number | null;
+    moveHistory: GameMove[];
     playerDeviceIds: Record<string, string | null>;
     spectatorDeviceIds: Record<string, string | null>;
 }
@@ -226,10 +239,10 @@ function clearTurnTimeout(sessionId: string): void {
     }
 }
 
-function setTurn(session: GameSession, playerId: string | null, placementsRemaining: number): void {
+function setTurn(session: GameSession, playerId: string | null, placementsRemaining: number, timestamp = Date.now()): void {
     session.gameState.currentTurnPlayerId = playerId;
     session.gameState.placementsRemaining = playerId ? placementsRemaining : 0;
-    session.gameState.currentTurnExpiresAt = playerId ? Date.now() + TURN_TIMEOUT_MS : null;
+    session.gameState.currentTurnExpiresAt = playerId ? timestamp + TURN_TIMEOUT_MS : null;
 }
 
 function scheduleTurnTimeout(sessionId: string): void {
@@ -259,6 +272,28 @@ function scheduleTurnTimeout(sessionId: string): void {
     }, delay);
 
     turnTimeouts.set(sessionId, timeout);
+}
+
+function getStartedGameHistoryPayload(session: StoredGameSession) {
+    if (session.startedAt === null) {
+        return null;
+    }
+
+    return {
+        id: session.historyId,
+        sessionId: session.id,
+        createdAt: session.createdAt,
+        startedAt: session.startedAt,
+        players: [...session.players]
+    };
+}
+
+function getCreateGameHistoryPayload(session: StoredGameSession) {
+    return {
+        id: session.historyId,
+        sessionId: session.id,
+        createdAt: session.createdAt
+    };
 }
 
 function getSessionList(): SessionInfo[] {
@@ -294,8 +329,12 @@ function updateSessionState(session: StoredGameSession) {
             session.startedAt = Date.now();
 
             /* We start with one turn only to omit the first player advantage of placing the first cell in the middle of the board. */
-            setTurn(session, session.players[0] ?? null, 1);
+            setTurn(session, session.players[0] ?? null, 1, session.startedAt);
             scheduleTurnTimeout(session.id);
+            const historyPayload = getStartedGameHistoryPayload(session);
+            if (historyPayload) {
+                void startGameHistory(historyPayload);
+            }
 
             emitGameState(session.id);
             broadcastSessions()
@@ -326,10 +365,21 @@ function finishSession(sessionId: string, reason: SessionFinishReason, winningPl
         currentTurnExpiresAt: session.gameState.currentTurnExpiresAt
     };
     const gameDurationMs = session.startedAt === null ? null : finishedAt - session.startedAt;
+    const historyPayload = getStartedGameHistoryPayload(session);
 
     if (session.state !== "finished") {
         session.state = 'finished';
         io.to(sessionId).emit('session-finished', { sessionId, reason, winningPlayerId });
+    }
+
+    if (historyPayload) {
+        void finalizeGameHistory({
+            ...historyPayload,
+            finishedAt,
+            winningPlayerId,
+            reason,
+            moves: [...session.moveHistory]
+        });
     }
 
     logMetric('game-finished', {
@@ -410,18 +460,49 @@ app.get('/api/sessions', (_req, res) => {
     res.json(getSessionList());
 });
 
+app.get('/api/finished-games', async (_req, res) => {
+    const games = await listFinishedGames();
+    if (games === null) {
+        res.status(503).json({
+            error: 'Game history storage is unavailable. Configure MONGODB_URI to enable finished game reviews.'
+        });
+        return;
+    }
+
+    res.json({ games });
+});
+
+app.get('/api/finished-games/:id', async (req, res) => {
+    const game = await getFinishedGame(req.params.id);
+    if (game === null) {
+        res.status(503).json({
+            error: 'Game history storage is unavailable. Configure MONGODB_URI to enable finished game reviews.'
+        });
+        return;
+    }
+
+    if (!game) {
+        res.status(404).json({ error: 'Finished game not found' });
+        return;
+    }
+
+    res.json(game);
+});
+
 app.post('/api/sessions', express.json(), (req, res) => {
     const sessionId = Math.random().toString(36).substring(2, 8);
     const createdAt = Date.now();
 
     const session: StoredGameSession = {
         id: sessionId,
+        historyId: randomUUID(),
         players: [],
         spectators: [],
         maxPlayers: 2,
         state: 'lobby',
         createdAt,
         startedAt: null,
+        moveHistory: [],
         playerDeviceIds: {},
         spectatorDeviceIds: {},
         gameState: {
@@ -434,6 +515,7 @@ app.post('/api/sessions', express.json(), (req, res) => {
 
     gameSessions.set(sessionId, session);
     broadcastSessions();
+    void createGameHistory(getCreateGameHistoryPayload(session));
 
     logMetric('game-created', {
         sessionId,
@@ -597,11 +679,26 @@ io.on('connection', (socket) => {
             return;
         }
 
+        const moveTimestamp = Date.now();
+        const move: GameMove = {
+            moveNumber: session.moveHistory.length + 1,
+            playerId: socket.id,
+            x: data.x,
+            y: data.y,
+            timestamp: moveTimestamp
+        };
+
         session.gameState.cells.push({
             x: data.x,
             y: data.y,
             occupiedBy: socket.id
         });
+        session.moveHistory.push(move);
+
+        const historyPayload = getStartedGameHistoryPayload(session);
+        if (historyPayload) {
+            void appendGameMove(historyPayload, move);
+        }
 
         if (hasSixInARow(session, socket.id, data.x, data.y)) {
             emitGameState(data.sessionId);
@@ -613,9 +710,9 @@ io.on('connection', (socket) => {
         if (session.gameState.placementsRemaining === 0) {
             const currentPlayerIndex = session.players.indexOf(socket.id);
             const nextPlayerIndex = currentPlayerIndex === 0 ? 1 : 0;
-            setTurn(session, session.players[nextPlayerIndex] ?? socket.id, 2);
+            setTurn(session, session.players[nextPlayerIndex] ?? socket.id, 2, moveTimestamp);
         } else {
-            session.gameState.currentTurnExpiresAt = Date.now() + TURN_TIMEOUT_MS;
+            session.gameState.currentTurnExpiresAt = moveTimestamp + TURN_TIMEOUT_MS;
         }
 
         scheduleTurnTimeout(data.sessionId);
@@ -652,7 +749,7 @@ server.listen(PORT, () => {
 });
 
 server.on('close', () => {
-    void closeMetricLogger();
+    void closeMongoConnection();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
