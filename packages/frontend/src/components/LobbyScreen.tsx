@@ -12,6 +12,7 @@ interface LobbyScreenProps {
   onHostGame: (request: CreateSessionRequest) => void
   onJoinGame: (sessionId: string) => void
   onViewFinishedGames: () => void
+  onViewOwnFinishedGames: () => void
 }
 
 function formatLiveDuration(startedAt: number | null, now: number) {
@@ -39,7 +40,8 @@ function LobbyScreen({
   liveSessions,
   onHostGame,
   onJoinGame,
-  onViewFinishedGames
+  onViewFinishedGames,
+  onViewOwnFinishedGames
 }: LobbyScreenProps) {
   const isPlayingDisabled = !isConnected || Boolean(shutdown)
   const [now, setNow] = useState(() => Date.now())
@@ -183,7 +185,7 @@ function LobbyScreen({
             </div>
           </section>
 
-          <LobbyAccountBox />
+          <LobbyAccountBox onViewOwnFinishedGames={onViewOwnFinishedGames} />
         </div>
 
         <ScreenFooter />

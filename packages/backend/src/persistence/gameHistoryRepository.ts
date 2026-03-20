@@ -52,6 +52,7 @@ interface ListFinishedGamesOptions {
     page?: number;
     pageSize?: number;
     baseTimestamp?: number;
+    playerProfileId?: string;
 }
 
 const mongoDbName = process.env.MONGODB_DB_NAME ?? 'ih3t';
@@ -173,17 +174,13 @@ export class GameHistoryRepository {
         const pageSize = this.normalizePageSize(options.pageSize);
         const baseTimestamp = this.normalizeBaseTimestamp(options.baseTimestamp);
         const requestedPage = this.normalizePage(options.page);
+        const matchStage = this.buildFinishedGamesMatch(baseTimestamp, options.playerProfileId);
         const aggregationResult = await collection.aggregate<{
             games: GameHistoryDocument[];
             totals: Array<{ totalGames: number; totalMoves: number }>;
         }>([
             {
-                $match: {
-                    finishedAt: {
-                        $ne: null,
-                        $lte: baseTimestamp
-                    }
-                }
+                $match: matchStage
             },
             { $sort: { finishedAt: -1, id: -1 } },
             {
@@ -212,12 +209,7 @@ export class GameHistoryRepository {
         const games = page === requestedPage
             ? facetResult.games
             : await collection
-                .find({
-                    finishedAt: {
-                        $ne: null,
-                        $lte: baseTimestamp
-                    }
-                })
+                .find(matchStage)
                 .sort({ finishedAt: -1, id: -1 })
                 .skip((page - 1) * pageSize)
                 .limit(pageSize)
@@ -263,6 +255,7 @@ export class GameHistoryRepository {
             await collection.createIndex({ id: 1 }, { unique: true });
             await collection.createIndex({ finishedAt: -1, id: -1 });
             await collection.createIndex({ sessionId: 1, finishedAt: -1 });
+            await collection.createIndex({ 'players.profileId': 1, finishedAt: -1, id: -1 });
             await this.migrateExistingGames(collection);
 
             this.logger.info({
@@ -319,7 +312,7 @@ export class GameHistoryRepository {
     private async migrateExistingGames(collection: Collection<GameHistoryDocument>): Promise<void> {
         const legacyDocuments = await collection.find({
             $or: [
-                { createdAt: { $exists: true } },
+                { version: { $exists: false } },
             ]
         }).toArray();
 
@@ -428,6 +421,16 @@ export class GameHistoryRepository {
 
     private createDefaultGameOptions(): LobbyOptions {
         return this.cloneGameOptions(DEFAULT_LOBBY_OPTIONS);
+    }
+
+    private buildFinishedGamesMatch(baseTimestamp: number, playerProfileId?: string) {
+        return {
+            finishedAt: {
+                $ne: null,
+                $lte: baseTimestamp
+            },
+            ...(playerProfileId ? { 'players.profileId': playerProfileId } : {})
+        };
     }
 
     private normalizePageSize(pageSize: number | undefined): number {

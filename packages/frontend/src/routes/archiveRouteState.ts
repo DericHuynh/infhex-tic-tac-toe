@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
+import type { FinishedGamesArchiveView } from '../queryHooks'
 
 function parseArchivePage(searchParams: URLSearchParams) {
   const pageValue = searchParams.get('page')
@@ -17,18 +18,15 @@ function parseArchiveBaseTimestamp(searchParams: URLSearchParams) {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-export function buildFinishedGamesPath(archivePage: number, archiveBaseTimestamp: number) {
-  const searchParams = new URLSearchParams()
-  searchParams.set('at', String(archiveBaseTimestamp))
-
-  if (archivePage > 1) {
-    searchParams.set('page', String(archivePage))
-  }
-
-  return `/games?${searchParams.toString()}`
+function getArchiveViewFromPath(pathname: string): FinishedGamesArchiveView {
+  return pathname.startsWith('/account/games') ? 'mine' : 'all'
 }
 
-export function buildFinishedGamePath(gameId: string, archivePage: number, archiveBaseTimestamp: number) {
+export function buildFinishedGamesPath(
+  archivePage: number,
+  archiveBaseTimestamp: number,
+  archiveView: FinishedGamesArchiveView = 'all'
+) {
   const searchParams = new URLSearchParams()
   searchParams.set('at', String(archiveBaseTimestamp))
 
@@ -36,7 +34,27 @@ export function buildFinishedGamePath(gameId: string, archivePage: number, archi
     searchParams.set('page', String(archivePage))
   }
 
-  return `/games/${encodeURIComponent(gameId)}?${searchParams.toString()}`
+  const pathname = archiveView === 'mine' ? '/account/games' : '/games'
+  return `${pathname}?${searchParams.toString()}`
+}
+
+export function buildFinishedGamePath(
+  gameId: string,
+  archivePage: number,
+  archiveBaseTimestamp: number,
+  archiveView: FinishedGamesArchiveView = 'all'
+) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('at', String(archiveBaseTimestamp))
+
+  if (archivePage > 1) {
+    searchParams.set('page', String(archivePage))
+  }
+
+  const pathname = archiveView === 'mine'
+    ? `/account/games/${encodeURIComponent(gameId)}`
+    : `/games/${encodeURIComponent(gameId)}`
+  return `${pathname}?${searchParams.toString()}`
 }
 
 export function buildSessionPath(sessionId: string) {
@@ -49,6 +67,7 @@ export function useArchiveRouteState() {
   const [searchParams] = useSearchParams()
   const archivePage = parseArchivePage(searchParams)
   const archiveBaseTimestamp = parseArchiveBaseTimestamp(searchParams)
+  const archiveView = getArchiveViewFromPath(location.pathname)
 
   useEffect(() => {
     if (archiveBaseTimestamp) {
@@ -62,7 +81,7 @@ export function useArchiveRouteState() {
         ...(archivePage > 1 ? { page: String(archivePage) } : {})
       }).toString()}`
     }, { replace: true })
-  }, [archiveBaseTimestamp, archivePage, location.pathname, navigate])
+  }, [archiveBaseTimestamp, archivePage, archiveView, location.pathname, navigate])
 
   if (!archiveBaseTimestamp) {
     return null
@@ -70,6 +89,7 @@ export function useArchiveRouteState() {
 
   return {
     archivePage,
-    archiveBaseTimestamp
+    archiveBaseTimestamp,
+    archiveView
   }
 }

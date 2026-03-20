@@ -3,13 +3,14 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { fetchJson } from './apiClient'
 
 export const FINISHED_GAMES_PAGE_SIZE = 20
+export type FinishedGamesArchiveView = 'all' | 'mine'
 
 export const queryKeys = {
   account: ['account'] as const,
   availableSessions: ['sessions', 'available'] as const,
   finishedGames: ['finished-games'] as const,
-  finishedGamesPage: (page: number, pageSize: number, baseTimestamp: number) =>
-    ['finished-games', page, pageSize, baseTimestamp] as const,
+  finishedGamesPage: (view: FinishedGamesArchiveView, page: number, pageSize: number, baseTimestamp: number) =>
+    ['finished-games', view, page, pageSize, baseTimestamp] as const,
   finishedGame: (gameId: string) => ['finished-games', gameId] as const
 }
 
@@ -45,12 +46,20 @@ async function fetchAccount() {
   return await fetchJson<AccountResponse>('/api/account')
 }
 
-async function fetchFinishedGames(page: number, pageSize: number, baseTimestamp: number) {
+async function fetchFinishedGames(
+  page: number,
+  pageSize: number,
+  baseTimestamp: number,
+  view: FinishedGamesArchiveView
+) {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
     baseTimestamp: String(baseTimestamp)
   })
+  if (view === 'mine') {
+    params.set('view', view)
+  }
 
   return await fetchJson<FinishedGamesPage>(`/api/finished-games?${params.toString()}`)
 }
@@ -75,10 +84,15 @@ export function useQueryAccount(options?: { enabled?: boolean }) {
   })
 }
 
-export function useQueryFinishedGames(page: number, baseTimestamp: number, options?: { enabled?: boolean }) {
+export function useQueryFinishedGames(
+  page: number,
+  baseTimestamp: number,
+  view: FinishedGamesArchiveView,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
-    queryKey: queryKeys.finishedGamesPage(page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp),
-    queryFn: () => fetchFinishedGames(page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp),
+    queryKey: queryKeys.finishedGamesPage(view, page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp),
+    queryFn: () => fetchFinishedGames(page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp, view),
     placeholderData: keepPreviousData,
     enabled: options?.enabled
   })

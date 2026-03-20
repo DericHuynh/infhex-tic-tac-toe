@@ -298,6 +298,15 @@ export class HttpApplication {
             };
         }
 
+        if (req.path === '/account/games') {
+            return {
+                ...defaultMetadata,
+                title: `My Match History • ${DEFAULT_PAGE_TITLE}`,
+                description: 'Review your own finished Infinity Hexagonial Tic-Tac-Toe matches while signed in.',
+                robots: 'noindex, nofollow'
+            };
+        }
+
         const finishedGameMatch = req.path.match(/^\/games\/([^/]+)$/);
         if (finishedGameMatch) {
             const finishedGame = await this.gameHistoryRepository.getFinishedGame(decodeURIComponent(finishedGameMatch[1]));
@@ -316,6 +325,28 @@ export class HttpApplication {
                 title: `Replay ${finishedGame.sessionId} • ${DEFAULT_PAGE_TITLE}`,
                 description: `Review finished match ${finishedGame.sessionId}: ${finishedGame.moveCount} moves, ${finishedGame.players.length} players, ended ${this.formatFinishReason(finishedGame.gameResult?.reason)}.`,
                 ogType: 'article'
+            };
+        }
+
+        const accountFinishedGameMatch = req.path.match(/^\/account\/games\/([^/]+)$/);
+        if (accountFinishedGameMatch) {
+            const finishedGame = await this.gameHistoryRepository.getFinishedGame(decodeURIComponent(accountFinishedGameMatch[1]));
+            if (!finishedGame) {
+                return {
+                    ...defaultMetadata,
+                    title: `Replay Not Found • ${DEFAULT_PAGE_TITLE}`,
+                    description: 'The requested finished match could not be found.',
+                    ogType: 'article',
+                    robots: 'noindex, nofollow'
+                };
+            }
+
+            return {
+                ...defaultMetadata,
+                title: `My Replay ${finishedGame.sessionId} • ${DEFAULT_PAGE_TITLE}`,
+                description: `Review your finished match ${finishedGame.sessionId}: ${finishedGame.moveCount} moves, ${finishedGame.players.length} players, ended ${this.formatFinishReason(finishedGame.gameResult?.reason)}.`,
+                ogType: 'article',
+                robots: 'noindex, nofollow'
             };
         }
 

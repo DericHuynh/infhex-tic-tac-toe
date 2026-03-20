@@ -81,9 +81,10 @@ function LobbyGuestDisplay({ hasPendingInvite }: LobbyGuestDisplayProps) {
 
 interface LobbySignedInAccountProps {
   account: AccountProfile
+  onViewOwnFinishedGames: () => void
 }
 
-function LobbySignedInAccount({ account }: LobbySignedInAccountProps) {
+function LobbySignedInAccount({ account, onViewOwnFinishedGames }: LobbySignedInAccountProps) {
   const [isEditingUsername, setIsEditingUsername] = useState(false)
   const [draftUsername, setDraftUsername] = useState(account.username)
   const [usernameError, setUsernameError] = useState<string | null>(null)
@@ -204,6 +205,12 @@ function LobbySignedInAccount({ account }: LobbySignedInAccountProps) {
               Edit Username
             </button> */}
             <button
+              onClick={onViewOwnFinishedGames}
+              className="rounded-full border border-sky-300/25 bg-sky-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-100 transition hover:bg-sky-400/20"
+            >
+              My Matches
+            </button>
+            <button
               onClick={() => void handleSignOut()}
               className="rounded-full border border-rose-300/25 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-500/20"
             >
@@ -216,7 +223,11 @@ function LobbySignedInAccount({ account }: LobbySignedInAccountProps) {
   )
 }
 
-function LobbyAccountBox() {
+interface LobbyAccountBoxProps {
+  onViewOwnFinishedGames: () => void
+}
+
+function LobbyAccountBox({ onViewOwnFinishedGames }: LobbyAccountBoxProps) {
   const location = useLocation()
   const hasPendingInvite = new URLSearchParams(location.search).has('join')
   const accountQuery = useQueryAccount()
@@ -226,7 +237,7 @@ function LobbyAccountBox() {
   if (accountQuery.isLoading) {
     inner = <LobbyAccountSkeleton />
   } else if (account) {
-    inner = <LobbySignedInAccount account={account} />
+    inner = <LobbySignedInAccount account={account} onViewOwnFinishedGames={onViewOwnFinishedGames} />
   } else {
     inner = <LobbyGuestDisplay hasPendingInvite={hasPendingInvite} />
   }

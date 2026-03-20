@@ -1,8 +1,11 @@
 import type { FinishedGameSummary, FinishedGamesPage } from '@ih3t/shared'
 import { getPlayerColor, getPlayerLabel } from './game-screen/gameBoardUtils'
+import type { FinishedGamesArchiveView } from '../queryHooks'
 
 interface FinishedGamesScreenProps {
   archive: FinishedGamesPage | null
+  archiveView: FinishedGamesArchiveView
+  requiresSignIn: boolean
   isLoading: boolean
   errorMessage: string | null
   onBack: () => void
@@ -80,6 +83,8 @@ function BackIcon() {
 
 function FinishedGamesScreen({
   archive,
+  archiveView,
+  requiresSignIn,
   isLoading,
   errorMessage,
   onBack,
@@ -87,6 +92,7 @@ function FinishedGamesScreen({
   onChangePage,
   onRefresh
 }: Readonly<FinishedGamesScreenProps>) {
+  const isOwnArchive = archiveView === 'mine'
   const games = archive?.games ?? []
   const pagination = archive?.pagination
   const currentPage = pagination?.page ?? 1
@@ -106,7 +112,7 @@ function FinishedGamesScreen({
               <div>
                 <p className="text-sm uppercase tracking-[0.32em] text-sky-200/80">Finished Games</p>
                 <h1 className="mt-2 text-2xl font-black uppercase tracking-[0.08em] text-white sm:text-4xl">
-                  Match Archive
+                  {isOwnArchive ? 'My Match History' : 'Match Archive'}
                 </h1>
               </div>
 
@@ -128,7 +134,9 @@ function FinishedGamesScreen({
               </div>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:mt-4 sm:text-base sm:leading-7">
-              Browse completed matches and open any game to step through every move on the board.
+              {isOwnArchive
+                ? 'Review the finished matches you played while signed in and open any replay move by move.'
+                : 'Browse completed matches and open any game to step through every move on the board.'}
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2 sm:gap-3">
@@ -166,6 +174,15 @@ function FinishedGamesScreen({
               <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 px-6 py-12 text-center text-slate-300">
                 Loading finished games...
               </div>
+            ) : requiresSignIn ? (
+              <div className="flex flex-1 items-center justify-center rounded-3xl border border-amber-300/20 bg-amber-400/10 px-6 py-8 text-center text-amber-50">
+                <div>
+                  <p className="text-lg font-semibold text-white">Sign in to view your own match history.</p>
+                  <p className="mt-3 text-sm leading-6 text-amber-50/80">
+                    This filter uses your player profile id, so it is only available for logged-in accounts.
+                  </p>
+                </div>
+              </div>
             ) : errorMessage ? (
               <div className="flex flex-1 items-center justify-center rounded-3xl border border-rose-300/20 bg-rose-500/10 px-6 py-8 text-center text-rose-100">
                 <p className="text-lg font-semibold">Could not load finished games.</p>
@@ -173,10 +190,16 @@ function FinishedGamesScreen({
               </div>
             ) : games.length === 0 ? (
               <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 px-6 py-12 text-center text-slate-300">
-                <p className="text-lg font-semibold text-white">No finished games are stored yet.</p>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Once MongoDB-backed history is available and matches finish, they will show up here automatically.
-                </p>
+                <div>
+                  <p className="text-lg font-semibold text-white">
+                    {isOwnArchive ? 'You have not finished any signed-in matches yet.' : 'No finished games are stored yet.'}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {isOwnArchive
+                      ? 'Once you complete a match while logged in, it will appear here automatically.'
+                      : 'Once MongoDB-backed history is available and matches finish, they will show up here automatically.'}
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden">
@@ -259,7 +282,7 @@ function FinishedGamesScreen({
                   </div>
 
                   <div className="mt-3 text-xs text-slate-400 sm:text-right sm:text-sm">
-                    Showing {pageStart}-{pageEnd} of {totalGames} archived matches
+                    Showing {pageStart}-{pageEnd} of {totalGames} {isOwnArchive ? 'personal matches' : 'archived matches'}
                   </div>
                 </div>
               </div>

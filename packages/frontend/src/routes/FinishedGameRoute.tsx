@@ -27,7 +27,8 @@ function FinishedGameRoute() {
       onBack={() => void navigate(
         buildFinishedGamesPath(
           archiveRouteState.archivePage,
-          archiveRouteState.archiveBaseTimestamp
+          archiveRouteState.archiveBaseTimestamp,
+          archiveRouteState.archiveView
         )
       )}
       onRetry={() => void finishedGameQuery.refetch()}

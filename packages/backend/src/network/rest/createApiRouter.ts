@@ -17,10 +17,12 @@ import { SessionError, SessionManager } from '../../session/sessionManager';
 
 const zPositiveInteger = z.coerce.number().int().positive();
 const zPositiveIntegerQueryValue = z.preprocess((value) => Array.isArray(value) ? value[0] : value, zPositiveInteger);
+const zFinishedGamesView = z.enum(['all', 'mine']);
 const zFinishedGamesQuery = z.object({
     page: zPositiveIntegerQueryValue.optional(),
     pageSize: zPositiveIntegerQueryValue.optional(),
-    baseTimestamp: zPositiveIntegerQueryValue.optional()
+    baseTimestamp: zPositiveIntegerQueryValue.optional(),
+    view: z.preprocess((value) => Array.isArray(value) ? value[0] : value, zFinishedGamesView).optional()
 });
 const zGameTimeControlInput = z.union([
     z.object({
@@ -96,10 +98,21 @@ export class ApiRouter {
 
         router.get('/finished-games', async (req, res) => {
             const query = zFinishedGamesQuery.parse(req.query);
+            const view = query.view ?? 'all';
+            const currentUser = view === 'mine'
+                ? await this.authService.getCurrentUser(req)
+                : null;
+
+            if (view === 'mine' && !currentUser) {
+                res.status(401).json({ error: 'Sign in to view your own match history.' });
+                return;
+            }
+
             const archivePage = await this.gameHistoryRepository.listFinishedGames({
                 page: query.page ?? 1,
                 pageSize: query.pageSize ?? 20,
-                baseTimestamp: query.baseTimestamp ?? Date.now()
+                baseTimestamp: query.baseTimestamp ?? Date.now(),
+                playerProfileId: currentUser?.id
             });
             res.json(archivePage);
         });

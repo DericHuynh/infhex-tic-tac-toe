@@ -70,6 +70,7 @@ function LobbyRoute() {
       onHostGame={createLobby}
       onJoinGame={joinLiveGame}
       onViewFinishedGames={() => void navigate(buildFinishedGamesPath(1, Date.now()))}
+      onViewOwnFinishedGames={() => void navigate(buildFinishedGamesPath(1, Date.now(), 'mine'))}
     />
   )
 }

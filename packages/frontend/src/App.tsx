@@ -33,6 +33,8 @@ function App() {
         <Route path="/session/:sessionId" element={<SessionRoute />} />
         <Route path="/games" element={<FinishedGamesRoute />} />
         <Route path="/games/:gameId" element={<FinishedGameRoute />} />
+        <Route path="/account/games" element={<FinishedGamesRoute />} />
+        <Route path="/account/games/:gameId" element={<FinishedGameRoute />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
