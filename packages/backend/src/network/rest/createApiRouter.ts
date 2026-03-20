@@ -111,11 +111,6 @@ export class ApiRouter {
                 return;
             }
 
-            if (game.players.length <= 1) {
-                /* Fix for #13 where the second player is missing in the players array. */
-                game.players = [...new Set(game.moves.map(move => move.playerId))];
-            }
-
             res.json(game);
         });
 

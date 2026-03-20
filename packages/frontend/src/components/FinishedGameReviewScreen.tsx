@@ -26,7 +26,7 @@ function formatElapsed(milliseconds: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-function getFinishReasonLabel(reason: FinishedGameRecord['reason']) {
+function getFinishReasonLabel(reason: NonNullable<FinishedGameRecord['gameResult']>['reason'] | null | undefined) {
   if (reason === 'six-in-a-row') {
     return 'Six in a row'
   }
@@ -139,6 +139,7 @@ function FinishedGameReviewScreen({
   const activeMove = game && visibleMoveCount > 0
     ? game.moves[visibleMoveCount - 1]
     : null
+  const gameResult = game?.gameResult ?? null
   const highlightedCellKeys = useMemo(
     () => getLastVisibleTurnCellKeys(game, visibleMoveCount),
     [game, visibleMoveCount]
@@ -152,7 +153,7 @@ function FinishedGameReviewScreen({
     resetView
   } = useGameBoard({
     boardState,
-    players: game?.players ?? [],
+    players: game?.players.map((player) => player.playerId) ?? [],
     interactionEnabled: true,
     canPlaceCell: false,
     isOwnTurn: true,
@@ -253,7 +254,7 @@ function FinishedGameReviewScreen({
                       <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Current Step</div>
                       <div className="mt-1 text-2xl font-bold text-white">
                         {activeMove
-                          ? `${getPlayerLabel(game.players, activeMove.playerId, game.playerNames)} at (${activeMove.x}, ${activeMove.y})`
+                          ? `${getPlayerLabel(game.players, activeMove.playerId)} at (${activeMove.x}, ${activeMove.y})`
                           : 'Board setup'}
                       </div>
                       <div className="mt-1 text-sm text-slate-300">
@@ -327,35 +328,37 @@ function FinishedGameReviewScreen({
                 <div className="mt-4 grid gap-3">
                   <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4">
                     <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Result</div>
-                    <div className="mt-1 text-xl font-bold text-white">{getFinishReasonLabel(game.reason)}</div>
+                    <div className="mt-1 text-xl font-bold text-white">{getFinishReasonLabel(gameResult?.reason)}</div>
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4">
                     <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Duration</div>
-                    <div className="mt-1 text-xl font-bold text-white">{formatElapsed(game.gameDurationMs)}</div>
+                    <div className="mt-1 text-xl font-bold text-white">{formatElapsed(gameResult?.durationMs ?? 0)}</div>
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4">
                     <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Winner</div>
                     <div className="mt-1 text-xl font-bold text-white">
-                      {game.winningPlayerId ? getPlayerLabel(game.players, game.winningPlayerId, game.playerNames) : 'No winner'}
+                      {gameResult?.winningPlayerId ? getPlayerLabel(game.players, gameResult.winningPlayerId) : 'No winner'}
                     </div>
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4">
                     <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Finished</div>
-                    <div className="mt-1 text-sm leading-6 text-slate-200">{formatDateTime(game.finishedAt)}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-200">
+                      {formatDateTime(game.finishedAt ?? game.startedAt)}
+                    </div>
                   </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {game.players.map((playerId) => (
+                  {game.players.map((player) => (
                     <div
-                      key={playerId}
+                      key={player.playerId}
                       className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200"
                     >
                       <span
                         className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: getPlayerColor(game.players, playerId) }}
+                        style={{ backgroundColor: getPlayerColor(game.players, player.playerId) }}
                       />
-                      <span>{getPlayerLabel(game.players, playerId, game.playerNames)}</span>
+                      <span>{getPlayerLabel(game.players, player.playerId)}</span>
                     </div>
                   ))}
                 </div>
@@ -406,7 +409,7 @@ function FinishedGameReviewScreen({
                           />
                         </div>
                         <div className="mt-2 break-words text-lg font-semibold text-white">
-                          {getPlayerLabel(game.players, move.playerId, game.playerNames)} placed at ({move.x}, {move.y})
+                          {getPlayerLabel(game.players, move.playerId)} placed at ({move.x}, {move.y})
                         </div>
                         <div className="mt-1 break-words text-sm text-slate-300">
                           {formatDateTime(move.timestamp)} • +{formatElapsed(move.timestamp - game.startedAt)}

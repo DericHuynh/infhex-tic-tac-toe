@@ -31,19 +31,19 @@ function formatDuration(milliseconds: number) {
 }
 
 function getResultLabel(game: FinishedGameSummary) {
-  if (game.reason === 'six-in-a-row') {
+  if (game.gameResult?.reason === 'six-in-a-row') {
     return 'Won by six in a row'
   }
 
-  if (game.reason === 'timeout') {
+  if (game.gameResult?.reason === 'timeout') {
     return 'Won on time'
   }
 
-  if (game.reason === 'surrender') {
+  if (game.gameResult?.reason === 'surrender') {
     return 'Won by surrender'
   }
 
-  if (game.reason === 'disconnect') {
+  if (game.gameResult?.reason === 'disconnect') {
     return 'Won by disconnect'
   }
 
@@ -193,27 +193,31 @@ function FinishedGamesScreen({
                           <div className="mt-2 text-xl font-bold text-white sm:text-2xl">{getResultLabel(game)}</div>
                           <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300 sm:text-sm">
                             <span className="rounded-full bg-slate-900/70 px-3 py-1">Moves: {game.moveCount}</span>
-                            <span className="rounded-full bg-slate-900/70 px-3 py-1">Duration: {formatDuration(game.gameDurationMs)}</span>
+                            <span className="rounded-full bg-slate-900/70 px-3 py-1">
+                              Duration: {formatDuration(game.gameResult?.durationMs ?? 0)}
+                            </span>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300 sm:text-sm">
-                            {game.players.map((playerId) => (
+                            {game.players.map((player) => (
                               <span
-                                key={playerId}
+                                key={player.playerId}
                                 className="inline-flex items-center gap-2 rounded-full bg-slate-900/70 px-3 py-1"
                               >
                                 <span
                                   className="h-2.5 w-2.5 rounded-full"
-                                  style={{ backgroundColor: getPlayerColor(game.players, playerId) }}
+                                  style={{ backgroundColor: getPlayerColor(game.players, player.playerId) }}
                                 />
-                                <span>{getPlayerLabel(game.players, playerId, game.playerNames)}</span>
+                                <span>{getPlayerLabel(game.players, player.playerId)}</span>
                               </span>
                             ))}
                           </div>
                         </div>
 
                         <div className="text-xs text-slate-300 sm:text-right sm:text-sm">
-                          <div className="font-semibold text-white">{formatDateTime(game.finishedAt)}</div>
-                        </div>
+                           <div className="font-semibold text-white">
+                             {formatDateTime(game.finishedAt ?? game.startedAt)}
+                           </div>
+                         </div>
                       </div>
                     </button>
                   ))}

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type {
     GameBoard,
     GameMove,
@@ -166,7 +165,7 @@ export function createGameSession(
         state: 'lobby',
         createdAt: Date.now(),
         startedAt: null,
-        currentGameId: randomUUID(),
+        currentGameId: '',
         moveHistory: [],
         boardState: {
             cells: [],

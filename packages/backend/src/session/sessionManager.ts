@@ -1,7 +1,6 @@
 import type {
     CreateSessionResponse,
-    PlayerNames,
-    PlayerProfileIds,
+    DatabaseGameResult,
     SessionFinishReason,
     SessionInfo,
     SessionParticipantRole,
@@ -13,7 +12,6 @@ import { BackgroundWorkerHub } from '../background/backgroundWorkers';
 import { ROOT_LOGGER } from '../logger';
 import {
     GameHistoryRepository,
-    type CreateGameHistoryPayload,
 } from '../persistence/gameHistoryRepository';
 import { GameSimulation, SimulationError } from '../simulation/gameSimulation';
 import type {
@@ -177,7 +175,6 @@ export class SessionManager {
 
         this.sessions.set(session.id, session);
         this.emitSessionsUpdated();
-        void this.gameHistoryRepository.createHistory(this.getCreateHistoryPayload(session));
 
         this.backgroundWorkers.track('game-created', {
             sessionId,
@@ -262,13 +259,13 @@ export class SessionManager {
         };
     }
 
-    activateSession(sessionId: string): void {
+    async activateSession(sessionId: string): Promise<void> {
         const session = this.sessions.get(sessionId);
         if (!session) {
             return;
         }
 
-        this.reconcileLobbyState(session);
+        await this.reconcileLobbyState(session);
     }
 
     leaveSession(sessionId: string, participantId: string, source: PlayerLeaveSource): void {
@@ -411,7 +408,6 @@ export class SessionManager {
         this.sessions.delete(session.id);
         this.sessions.set(nextSession.id, nextSession);
         this.emitSessionsUpdated();
-        void this.gameHistoryRepository.createHistory(this.getCreateHistoryPayload(nextSession));
 
         return {
             sessionId: nextSession.id,
@@ -480,7 +476,7 @@ export class SessionManager {
         this.requestApplicationShutdown('deadline-reached');
     }
 
-    private reconcileLobbyState(session: ServerGameSession): void {
+    private async reconcileLobbyState(session: ServerGameSession): Promise<void> {
         if (session.players.length === 0) {
             this.logger.info({
                 event: 'session.terminated-empty',
@@ -496,18 +492,19 @@ export class SessionManager {
             return;
         }
 
+        const startedAt = Date.now();
+        const gameId = await this.ensureGameHistory(session);
+        if (this.sessions.get(session.id) !== session || session.state !== 'lobby' || session.players.length < MAX_PLAYERS_PER_SESSION) {
+            return;
+        }
+
+        session.currentGameId = gameId;
         session.state = 'in-game';
-        session.startedAt = Date.now();
+        session.startedAt = startedAt;
         session.finishReason = null;
         session.winningPlayerId = null;
         session.rematchAcceptedPlayerIds = [];
         this.simulation.startSession(session, this.handleTurnExpired, session.startedAt);
-        void this.gameHistoryRepository.markStarted(
-            session.currentGameId,
-            session.players.map(({ id }) => id),
-            this.buildPlayerNames(session),
-            this.buildPlayerProfileIds(session)
-        );
 
         this.emitGameState(session);
         this.emitSessionsUpdated();
@@ -533,13 +530,13 @@ export class SessionManager {
         session.rematchAcceptedPlayerIds = [];
 
         const gameDurationMs = session.startedAt === null ? null : finishedAt - session.startedAt;
-
-        void this.gameHistoryRepository.finalizeHistory({
-            id: session.currentGameId,
-            startedAt: session.startedAt,
+        const result: DatabaseGameResult = {
             winningPlayerId,
-            reason,
-        });
+            durationMs: gameDurationMs,
+            reason
+        };
+
+        void this.ensureGameHistory(session).then((gameId) => this.gameHistoryRepository.finishGame(gameId, result));
 
         this.backgroundWorkers.track('game-finished', {
             sessionId: session.id,
@@ -617,7 +614,7 @@ export class SessionManager {
         if (this.sessions.has(session.id)) {
             this.emitSessionUpdated(session);
         }
-        this.reconcileLobbyState(session);
+        void this.reconcileLobbyState(session);
     }
 
     private removeSpectatorFromSession(session: ServerGameSession, participantId: string, source: PlayerLeaveSource): void {
@@ -818,32 +815,26 @@ export class SessionManager {
         }
     }
 
-    private buildPlayerNames(session: ServerGameSession): PlayerNames {
-        const playerNames: PlayerNames = {};
-
-        for (const [playerIndex, player] of session.players.entries()) {
-            playerNames[player.id] = player.displayName || `Player ${playerIndex + 1}`;
+    private async ensureGameHistory(session: ServerGameSession): Promise<string> {
+        if (session.currentGameId) {
+            return session.currentGameId;
         }
 
-        return playerNames;
+        const gameId = await this.gameHistoryRepository.createGame(
+            session.id,
+            this.buildDatabasePlayers(session),
+            session.gameOptions
+        );
+        session.currentGameId = gameId;
+        return gameId;
     }
 
-    private buildPlayerProfileIds(session: ServerGameSession): PlayerProfileIds {
-        const playerProfileIds: PlayerProfileIds = {};
-
-        for (const player of session.players) {
-            playerProfileIds[player.id] = player.profileId;
-        }
-
-        return playerProfileIds;
-    }
-
-    private getCreateHistoryPayload(session: ServerGameSession): CreateGameHistoryPayload {
-        return {
-            id: session.currentGameId,
-            sessionId: session.id,
-            createdAt: session.createdAt
-        };
+    private buildDatabasePlayers(session: ServerGameSession) {
+        return session.players.map((player, playerIndex) => ({
+            playerId: player.id,
+            displayName: player.displayName || `Player ${playerIndex + 1}`,
+            profileId: player.profileId ?? player.id
+        }));
     }
 
     private maybeShutdownAfterSessionFinished(): void {

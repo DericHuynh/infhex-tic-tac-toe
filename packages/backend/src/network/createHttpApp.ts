@@ -314,7 +314,7 @@ export class HttpApplication {
             return {
                 ...defaultMetadata,
                 title: `Replay ${finishedGame.sessionId} • ${DEFAULT_PAGE_TITLE}`,
-                description: `Review finished match ${finishedGame.sessionId}: ${finishedGame.moveCount} moves, ${finishedGame.players.length} players, ended ${this.formatFinishReason(finishedGame.reason)}.`,
+                description: `Review finished match ${finishedGame.sessionId}: ${finishedGame.moveCount} moves, ${finishedGame.players.length} players, ended ${this.formatFinishReason(finishedGame.gameResult?.reason)}.`,
                 ogType: 'article'
             };
         }
@@ -350,7 +350,7 @@ export class HttpApplication {
         };
     }
 
-    private formatFinishReason(reason: string): string {
+    private formatFinishReason(reason: string | null | undefined): string {
         switch (reason) {
             case 'six-in-a-row':
                 return 'with a six-in-a-row win';

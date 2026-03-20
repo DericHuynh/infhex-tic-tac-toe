@@ -151,19 +151,44 @@ export const zGameMove = z.object({
 });
 export type GameMove = z.infer<typeof zGameMove>;
 
+export const zDatabaseGamePlayer = z.object({
+    playerId: zIdentifier,
+    displayName: z.string(),
+    profileId: zIdentifier
+});
+export type DatabaseGamePlayer = z.infer<typeof zDatabaseGamePlayer>;
+
+export const zDatabaseGameResult = z.object({
+    winningPlayerId: zIdentifier.nullable(),
+    durationMs: z.number().int().nonnegative().nullable(),
+    reason: zSessionFinishReason,
+});
+export type DatabaseGameResult = z.infer<typeof zDatabaseGameResult>;
+
+export const zDatabaseGame = z.object({
+    id: zIdentifier,
+    version: z.literal(2),
+
+    sessionId: zIdentifier,
+    startedAt: zTimestamp,
+    finishedAt: zTimestamp.nullable(),
+    players: z.array(zDatabaseGamePlayer),
+    gameOptions: zLobbyOptions,
+    moves: z.array(zGameMove),
+    moveCount: z.number().int().nonnegative(),
+    gameResult: zDatabaseGameResult.nullable()
+});
+export type DatabaseGame = z.infer<typeof zDatabaseGame>;
+
 export const zFinishedGameSummary = z.object({
     id: zIdentifier,
     sessionId: zIdentifier,
-    players: z.array(zIdentifier),
-    playerNames: zPlayerNames,
-    playerProfileIds: zPlayerProfileIds,
-    winningPlayerId: zIdentifier.nullable(),
-    reason: zSessionFinishReason,
-    moveCount: z.number().int().nonnegative(),
-    createdAt: zTimestamp,
     startedAt: zTimestamp,
-    finishedAt: zTimestamp,
-    gameDurationMs: z.number().int().nonnegative()
+    finishedAt: zTimestamp.nullable(),
+    players: z.array(zDatabaseGamePlayer),
+    gameOptions: zLobbyOptions,
+    moveCount: z.number().int().nonnegative(),
+    gameResult: zDatabaseGameResult.nullable()
 });
 export type FinishedGameSummary = z.infer<typeof zFinishedGameSummary>;
 

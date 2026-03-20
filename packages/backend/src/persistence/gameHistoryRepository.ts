@@ -1,64 +1,52 @@
+import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import type { Collection, Document } from 'mongodb';
 import {
-    FinishedGamesPage,
-    FinishedGameRecord,
-    FinishedGameSummary,
-    GameMove,
-    PlayerNames,
-    PlayerProfileIds,
-    SessionFinishReason,
+    type DatabaseGame,
+    type DatabaseGamePlayer,
+    type DatabaseGameResult,
+    DEFAULT_LOBBY_OPTIONS,
+    type FinishedGameRecord,
+    type FinishedGameSummary,
+    type FinishedGamesPage,
+    type GameMove,
+    type LobbyOptions,
+    zDatabaseGame,
     zFinishedGameRecord,
     zFinishedGamesPage,
     zFinishedGameSummary,
     zGameMove,
-    zPlayerNames,
-    zPlayerProfileIds,
+    zLobbyOptions,
     zSessionFinishReason,
 } from '@ih3t/shared';
 import { z } from 'zod';
 import { ROOT_LOGGER } from '../logger';
 import { MongoDatabase } from './mongoClient';
 
-export interface CreateGameHistoryPayload {
-    id: string;
-    sessionId: string;
-    createdAt: number;
-}
+const zGameHistoryDocument = zDatabaseGame;
+type GameHistoryDocument = z.infer<typeof zGameHistoryDocument> & Document;
 
-export interface StartedGameHistoryPayload extends CreateGameHistoryPayload {
-    startedAt: number | null;
-    players: string[];
-    playerNames: PlayerNames;
-    playerProfileIds: PlayerProfileIds;
-}
-
-export interface FinishedGameHistoryPayload extends StartedGameHistoryPayload {
-    finishedAt: number;
-    winningPlayerId: string | null;
-    reason: SessionFinishReason;
-    moves: GameMove[];
-}
-
-const zGameHistoryDocument = z.object({
+const zLegacyGameHistoryDocument = z.object({
+    _id: z.unknown().optional(),
     id: z.string(),
     sessionId: z.string(),
-    state: z.enum(['lobby', 'in-game', 'finished']),
-    players: z.array(z.string()),
-    playerNames: zPlayerNames.optional(),
-    playerProfileIds: zPlayerProfileIds.optional(),
-    winningPlayerId: z.string().nullable(),
-    reason: zSessionFinishReason.nullable(),
-    moveCount: z.number().int().nonnegative(),
-    moves: z.array(zGameMove),
-    createdAt: z.number().int(),
-    startedAt: z.number().int().nullable(),
-    finishedAt: z.number().int().nullable(),
-    gameDurationMs: z.number().int().nonnegative().nullable(),
-    updatedAt: z.number().int()
+    state: z.enum(['lobby', 'in-game', 'finished']).optional(),
+    players: z.array(z.string()).optional(),
+    playerNames: z.record(z.string(), z.string()).optional(),
+    playerProfileIds: z.record(z.string(), z.string().nullable()).optional(),
+    winningPlayerId: z.string().nullable().optional(),
+    reason: zSessionFinishReason.nullable().optional(),
+    moveCount: z.number().int().nonnegative().optional(),
+    moves: z.array(zGameMove).optional(),
+    createdAt: z.number().int().optional(),
+    startedAt: z.number().int().nullable().optional(),
+    finishedAt: z.number().int().nullable().optional(),
+    gameDurationMs: z.number().int().nonnegative().nullable().optional(),
+    updatedAt: z.number().int().optional(),
+    gameOptions: zLobbyOptions.optional(),
 });
-type GameHistoryDocument = z.infer<typeof zGameHistoryDocument> & Document;
+type LegacyGameHistoryDocument = z.infer<typeof zLegacyGameHistoryDocument> & Document;
 
 interface ListFinishedGamesOptions {
     page?: number;
@@ -81,77 +69,46 @@ export class GameHistoryRepository {
         this.logger = rootLogger.child({ component: 'game-history-repository' });
     }
 
-    async createHistory(payload: CreateGameHistoryPayload): Promise<boolean> {
+    async createGame(sessionId: string, players: DatabaseGamePlayer[], gameOptions: LobbyOptions): Promise<string> {
         const collection = await this.getCollection();
+        const gameId = randomUUID();
+        const startedAt = Date.now();
 
         try {
-            await collection.insertOne(this.createDocument(payload) as GameHistoryDocument);
-            return true;
+            await collection.insertOne({
+                id: gameId,
+                version: 2,
+
+                sessionId,
+                startedAt,
+                finishedAt: null,
+                players,
+                gameOptions,
+                moves: [],
+                moveCount: 0,
+                gameResult: null
+            });
         } catch (error: unknown) {
             this.logger.error({
                 err: error,
                 type: 'game-history',
                 event: 'game-history-create-error',
                 storage: 'mongodb',
-                gameId: payload.id
+                gameId,
+                sessionId
             }, 'Failed to create game history');
-
-            return false;
         }
+
+        return gameId;
     }
 
-    async markStarted(
-        id: string,
-        players: string[],
-        playerNames: PlayerNames,
-        playerProfileIds: PlayerProfileIds
-    ): Promise<boolean> {
+    async appendMove(gameId: string, move: GameMove): Promise<void> {
         const collection = await this.getCollection();
 
         try {
             const result = await collection.updateOne(
-                { id: id },
+                { id: gameId },
                 {
-                    $set: {
-                        state: 'in-game',
-                        players: players,
-                        playerNames: { ...playerNames },
-                        playerProfileIds: { ...playerProfileIds },
-                        startedAt: Date.now(),
-                        updatedAt: Date.now()
-                    }
-                }
-            );
-
-            if (result.matchedCount === 0) {
-                this.logMissingHistory('game-history-start-error', id);
-                return false;
-            }
-
-            return true;
-        } catch (error: unknown) {
-            this.logger.error({
-                err: error,
-                type: 'game-history',
-                event: 'game-history-start-error',
-                storage: 'mongodb',
-                gameId: id
-            }, 'Failed to mark game history as started');
-
-            return false;
-        }
-    }
-
-    async appendMove(id: string, move: GameMove): Promise<boolean> {
-        const collection = await this.getCollection();
-
-        try {
-            const result = await collection.updateOne(
-                { id: id },
-                {
-                    $set: {
-                        updatedAt: move.timestamp
-                    },
                     $push: {
                         moves: move
                     } as never,
@@ -162,63 +119,52 @@ export class GameHistoryRepository {
             );
 
             if (result.matchedCount === 0) {
-                this.logMissingHistory('game-history-move-error', id, {
+                this.logMissingHistory('game-history-move-error', gameId, {
                     moveNumber: move.moveNumber
                 });
-                return false;
             }
-
-            return true;
         } catch (error: unknown) {
             this.logger.error({
                 err: error,
                 type: 'game-history',
                 event: 'game-history-move-error',
                 storage: 'mongodb',
-                gameId: id,
+                gameId,
                 moveNumber: move.moveNumber
             }, 'Failed to append game move');
-
-            return false;
         }
     }
 
-    async finalizeHistory(payload: Pick<FinishedGameHistoryPayload, "id" | "winningPlayerId" | "reason" | "startedAt">): Promise<boolean> {
+    async finishGame(gameId: string, result: DatabaseGameResult): Promise<void> {
         const collection = await this.getCollection();
         const finishedAt = Date.now();
-        const effectiveStartedAt = payload.startedAt ?? finishedAt;
 
         try {
-            const result = await collection.updateOne(
-                { id: payload.id },
+            const updateResult = await collection.updateOne(
+                { id: gameId },
                 {
                     $set: {
-                        state: 'finished',
-                        winningPlayerId: payload.winningPlayerId,
-                        reason: payload.reason,
                         finishedAt,
-                        gameDurationMs: Math.max(0, finishedAt - effectiveStartedAt),
-                        updatedAt: finishedAt
+                        gameResult: {
+                            winningPlayerId: result.winningPlayerId,
+                            durationMs: result.durationMs,
+                            reason: result.reason
+                        }
                     }
                 }
             );
 
-            if (result.matchedCount === 0) {
-                this.logMissingHistory('game-history-finalize-error', payload.id);
-                return false;
+            if (updateResult.matchedCount === 0) {
+                this.logMissingHistory('game-history-finalize-error', gameId);
             }
-
-            return true;
         } catch (error: unknown) {
             this.logger.error({
                 err: error,
                 type: 'game-history',
                 event: 'game-history-finalize-error',
                 storage: 'mongodb',
-                gameId: payload.id
+                gameId
             }, 'Failed to finalize game history');
-
-            return false;
         }
     }
 
@@ -233,8 +179,10 @@ export class GameHistoryRepository {
         }>([
             {
                 $match: {
-                    state: 'finished',
-                    finishedAt: { $lte: baseTimestamp }
+                    finishedAt: {
+                        $ne: null,
+                        $lte: baseTimestamp
+                    }
                 }
             },
             { $sort: { finishedAt: -1, id: -1 } },
@@ -265,8 +213,10 @@ export class GameHistoryRepository {
             ? facetResult.games
             : await collection
                 .find({
-                    state: 'finished',
-                    finishedAt: { $lte: baseTimestamp }
+                    finishedAt: {
+                        $ne: null,
+                        $lte: baseTimestamp
+                    }
                 })
                 .sort({ finishedAt: -1, id: -1 })
                 .skip((page - 1) * pageSize)
@@ -288,8 +238,13 @@ export class GameHistoryRepository {
 
     async getFinishedGame(id: string): Promise<FinishedGameRecord | undefined> {
         const collection = await this.getCollection();
+        const document = await collection.findOne({
+            id,
+            finishedAt: {
+                $ne: null
+            }
+        });
 
-        const document = await collection.findOne({ id, state: 'finished' });
         if (!document) {
             return undefined;
         }
@@ -306,8 +261,9 @@ export class GameHistoryRepository {
             const database = await this.mongoDatabase.getDatabase();
             const collection = database.collection<GameHistoryDocument>(mongoCollectionName);
             await collection.createIndex({ id: 1 }, { unique: true });
-            await collection.createIndex({ state: 1, finishedAt: -1, id: -1 });
+            await collection.createIndex({ finishedAt: -1, id: -1 });
             await collection.createIndex({ sessionId: 1, finishedAt: -1 });
+            await this.migrateExistingGames(collection);
 
             this.logger.info({
                 type: 'game-history',
@@ -334,44 +290,20 @@ export class GameHistoryRepository {
         return this.collectionPromise;
     }
 
-    private createDocument(payload: CreateGameHistoryPayload): Omit<GameHistoryDocument, '_id'> {
-        return {
-            id: payload.id,
-            sessionId: payload.sessionId,
-            state: 'lobby',
-            players: [],
-            playerNames: {},
-            playerProfileIds: {},
-            winningPlayerId: null,
-            reason: null,
-            moveCount: 0,
-            moves: [],
-            createdAt: payload.createdAt,
-            startedAt: null,
-            finishedAt: null,
-            gameDurationMs: null,
-            updatedAt: payload.createdAt
-        };
-    }
-
     private mapSummary(document: unknown): FinishedGameSummary {
         const parsedDocument = zGameHistoryDocument.parse(document);
-        const startedAt = parsedDocument.startedAt ?? parsedDocument.createdAt;
-        const finishedAt = parsedDocument.finishedAt ?? parsedDocument.updatedAt;
 
         return zFinishedGameSummary.parse({
             id: parsedDocument.id,
             sessionId: parsedDocument.sessionId,
-            players: [...parsedDocument.players],
-            playerNames: this.normalizePlayerNames(parsedDocument.players, parsedDocument.playerNames),
-            playerProfileIds: this.normalizePlayerProfileIds(parsedDocument.players, parsedDocument.playerProfileIds),
-            winningPlayerId: parsedDocument.winningPlayerId,
-            reason: parsedDocument.reason ?? 'terminated',
+            startedAt: parsedDocument.startedAt,
+            finishedAt: parsedDocument.finishedAt,
+            players: parsedDocument.players.map((player) => ({ ...player })),
+            gameOptions: this.cloneGameOptions(parsedDocument.gameOptions),
             moveCount: parsedDocument.moveCount,
-            createdAt: parsedDocument.createdAt,
-            startedAt,
-            finishedAt,
-            gameDurationMs: parsedDocument.gameDurationMs ?? Math.max(0, finishedAt - startedAt)
+            gameResult: parsedDocument.gameResult
+                ? { ...parsedDocument.gameResult }
+                : null
         });
     }
 
@@ -379,32 +311,123 @@ export class GameHistoryRepository {
         const parsedDocument = zGameHistoryDocument.parse(document);
 
         return zFinishedGameRecord.parse({
-            ...this.mapSummary(document),
-            moves: [...parsedDocument.moves]
+            ...this.mapSummary(parsedDocument),
+            moves: parsedDocument.moves.map((move) => ({ ...move }))
         });
     }
 
-    private normalizePlayerNames(players: string[], playerNames: PlayerNames | undefined): PlayerNames {
-        const normalizedPlayerNames: PlayerNames = {};
+    private async migrateExistingGames(collection: Collection<GameHistoryDocument>): Promise<void> {
+        const legacyDocuments = await collection.find({
+            $or: [
+                { createdAt: { $exists: true } },
+            ]
+        }).toArray();
 
-        for (const [playerIndex, playerId] of players.entries()) {
-            normalizedPlayerNames[playerId] = playerNames?.[playerId] ?? `Player ${playerIndex + 1}`;
+        if (legacyDocuments.length === 0) {
+            return;
         }
 
-        return normalizedPlayerNames;
+        const operations = legacyDocuments.flatMap((document) => {
+            const migratedDocument = this.migrateLegacyDocument(document);
+            if (!migratedDocument) {
+                return [];
+            }
+
+            return [{
+                replaceOne: {
+                    filter: { _id: document._id },
+                    replacement: {
+                        _id: document._id,
+                        ...migratedDocument
+                    } as GameHistoryDocument
+                }
+            }];
+        });
+
+        if (operations.length === 0) {
+            return;
+        }
+
+        await collection.bulkWrite(operations, { ordered: false });
+        this.logger.info({
+            type: 'game-history',
+            event: 'game-history-migration-complete',
+            storage: 'mongodb',
+            migratedGames: operations.length
+        }, 'Migrated legacy game history documents');
     }
 
-    private normalizePlayerProfileIds(
-        players: string[],
-        playerProfileIds: PlayerProfileIds | undefined
-    ): PlayerProfileIds {
-        const normalizedPlayerProfileIds: PlayerProfileIds = {};
-
-        for (const playerId of players) {
-            normalizedPlayerProfileIds[playerId] = playerProfileIds?.[playerId] ?? null;
+    private migrateLegacyDocument(document: unknown): DatabaseGame | null {
+        const alreadyMigratedDocument = zGameHistoryDocument.safeParse(document);
+        if (alreadyMigratedDocument.success) {
+            return alreadyMigratedDocument.data;
         }
 
-        return normalizedPlayerProfileIds;
+        const legacyDocument = zLegacyGameHistoryDocument.safeParse(document);
+        if (!legacyDocument.success) {
+            this.logger.warn({
+                type: 'game-history',
+                event: 'game-history-migration-skipped',
+                storage: 'mongodb',
+                issues: legacyDocument.error.issues
+            }, 'Skipped migrating an invalid game history document');
+            return null;
+        }
+
+        const parsedDocument = legacyDocument.data;
+        const moves = parsedDocument.moves ?? [];
+        const startedAt = parsedDocument.startedAt
+            ?? parsedDocument.createdAt
+            ?? moves[0]?.timestamp
+            ?? parsedDocument.updatedAt
+            ?? Date.now();
+        const finishedAt = parsedDocument.finishedAt ?? null;
+        const players = this.mapLegacyPlayers(parsedDocument.players ?? [], parsedDocument);
+        const moveCount = Math.max(parsedDocument.moveCount ?? 0, moves.length);
+        const durationMs = parsedDocument.gameDurationMs
+            ?? (finishedAt === null ? null : Math.max(0, finishedAt - startedAt));
+        const gameResult = finishedAt === null
+            ? null
+            : {
+                winningPlayerId: parsedDocument.winningPlayerId ?? null,
+                durationMs,
+                reason: parsedDocument.reason ?? 'terminated'
+            } satisfies DatabaseGameResult;
+
+        return zGameHistoryDocument.parse({
+            id: parsedDocument.id,
+            version: 2,
+
+            sessionId: parsedDocument.sessionId,
+            startedAt,
+            finishedAt,
+            players,
+            gameOptions: parsedDocument.gameOptions
+                ? this.cloneGameOptions(parsedDocument.gameOptions)
+                : this.createDefaultGameOptions(),
+            moves: moves.map((move) => ({ ...move })),
+            moveCount,
+            gameResult
+        });
+    }
+
+    private mapLegacyPlayers(playerIds: string[], document: LegacyGameHistoryDocument): DatabaseGamePlayer[] {
+        return playerIds.map((playerId, playerIndex) => ({
+            playerId,
+            displayName: document.playerNames?.[playerId]?.trim() || `Player ${playerIndex + 1}`,
+            profileId: document.playerProfileIds?.[playerId] ?? playerId
+        }));
+    }
+
+    private cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
+        return {
+            ...gameOptions,
+            timeControl: { ...gameOptions.timeControl }
+        };
+    }
+
+    private createDefaultGameOptions(): LobbyOptions {
+        return this.cloneGameOptions(DEFAULT_LOBBY_OPTIONS);
     }
 
     private normalizePageSize(pageSize: number | undefined): number {

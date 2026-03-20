@@ -116,7 +116,7 @@ export class SocketServerGateway {
                 try {
                     const joinResult = await this.socketJoinSession(socket, sessionId);
                     if (joinResult.participantRole === 'player' && joinResult.isNewParticipant) {
-                        this.sessionManager.activateSession(sessionId);
+                        await this.sessionManager.activateSession(sessionId);
                     }
 
                     this.logger.info({
@@ -154,7 +154,7 @@ export class SocketServerGateway {
                 }
             });
 
-            socket.on('request-rematch', () => {
+            socket.on('request-rematch', async () => {
                 try {
                     const { sessionId, participantId } = this.requireParticipation(socket.id);
                     const rematch = this.sessionManager.requestRematch(sessionId, participantId);
@@ -202,7 +202,7 @@ export class SocketServerGateway {
                         });
                     }
 
-                    this.sessionManager.activateSession(nextSession.sessionId);
+                    await this.sessionManager.activateSession(nextSession.sessionId);
                 } catch (error: unknown) {
                     logSocketActionFailure(this.logger, 'request-rematch', socket, error);
                     socket.emit('error', getSocketErrorMessage(error));

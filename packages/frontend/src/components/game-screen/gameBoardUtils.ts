@@ -1,4 +1,4 @@
-import type { PlayerNames } from '@ih3t/shared'
+import type { DatabaseGamePlayer, PlayerNames } from '@ih3t/shared'
 import type { BoardCell } from '@ih3t/shared'
 
 export const HEX_RADIUS = 8
@@ -27,9 +27,24 @@ export interface RenderableCell extends HexCell {
   pointY: number
 }
 
-export function getPlayerColor(players: string[], playerId: string): string {
+type PlayerReference = string | DatabaseGamePlayer
+
+function getPlayerId(player: PlayerReference): string {
+  return typeof player === 'string' ? player : player.playerId
+}
+
+function getDatabasePlayerDisplayName(players: readonly PlayerReference[], playerId: string): string | null {
+  const player = players.find((candidate) => typeof candidate !== 'string' && candidate.playerId === playerId)
+  if (!player || typeof player === 'string') {
+    return null
+  }
+
+  return player.displayName.trim() || null
+}
+
+export function getPlayerColor(players: readonly PlayerReference[], playerId: string): string {
   const palette = ['#fbbf24', '#38bdf8', '#f472b6', '#34d399', '#c084fc', '#fb7185']
-  const index = players.indexOf(playerId)
+  const index = players.findIndex((player) => getPlayerId(player) === playerId)
 
   if (index === -1) {
     return palette[0]
@@ -42,9 +57,19 @@ export function getCellKey(x: number, y: number): string {
   return `${x},${y}`
 }
 
-export function getPlayerLabel(players: string[], playerId: string | null, playerNames?: PlayerNames, fallbackName: string = "A player"): string {
+export function getPlayerLabel(
+  players: readonly PlayerReference[],
+  playerId: string | null,
+  playerNames?: PlayerNames,
+  fallbackName: string = 'A player'
+): string {
   if (!playerId) {
     return fallbackName
+  }
+
+  const embeddedPlayerName = getDatabasePlayerDisplayName(players, playerId)
+  if (embeddedPlayerName) {
+    return embeddedPlayerName
   }
 
   const playerName = playerNames?.[playerId]?.trim()
@@ -52,7 +77,7 @@ export function getPlayerLabel(players: string[], playerId: string | null, playe
     return playerName
   }
 
-  const playerIndex = players.indexOf(playerId)
+  const playerIndex = players.findIndex((player) => getPlayerId(player) === playerId)
   if (playerIndex === -1) {
     return fallbackName
   }
