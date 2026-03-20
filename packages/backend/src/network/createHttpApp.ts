@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { GameTimeControl } from '@ih3t/shared';
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
@@ -93,6 +94,58 @@ function getSingleQueryValue(value: unknown): string | null {
     }
 
     return null;
+}
+
+function formatTimeControl(timeControl: GameTimeControl): string {
+    if (timeControl.mode === 'unlimited') {
+        return 'no';
+    }
+
+    const formatSeconds = (totalSeconds: number): string => {
+        if (totalSeconds % 60 === 0) {
+            return `${totalSeconds / 60}m`;
+        }
+
+        return `${totalSeconds}s`;
+    };
+
+    if (timeControl.mode === 'turn') {
+        return `${formatSeconds(Math.round(timeControl.turnTimeMs / 1000))} turn based`;
+    }
+
+    return `${formatSeconds(Math.round(timeControl.mainTimeMs / 1000))} +${formatSeconds(Math.round(timeControl.incrementMs / 1000))} clock based`;
+}
+
+function getNormalizedPlayerNames(playerNames: string[]): string[] {
+    return playerNames
+        .map((playerName) => playerName.trim())
+        .filter((playerName) => playerName.length > 0);
+}
+
+function describePlayersWaiting(playerNames: string[], visibility: string): string {
+    const [firstPlayerName] = getNormalizedPlayerNames(playerNames);
+    if (firstPlayerName) {
+        return `${firstPlayerName} is waiting for you in a ${visibility} lobby`;
+    }
+
+    return `A ${visibility} lobby is waiting for you`;
+}
+
+function describePlayersInMatch(playerNames: string[], visibility: string): string {
+    const normalizedPlayerNames = getNormalizedPlayerNames(playerNames);
+    if (normalizedPlayerNames.length === 1) {
+        return `${normalizedPlayerNames[0]} is already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+    }
+
+    if (normalizedPlayerNames.length === 2) {
+        return `${normalizedPlayerNames[0]} and ${normalizedPlayerNames[1]} are already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+    }
+
+    if (normalizedPlayerNames.length > 2) {
+        return `${normalizedPlayerNames[0]}, ${normalizedPlayerNames[1]}, and ${normalizedPlayerNames.length - 2} more are already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+    }
+
+    return `A ${visibility} Infinity Hexagonial Tic-Tac-Toe match is underway`;
 }
 
 @injectable()
@@ -284,8 +337,8 @@ export class HttpApplication {
                     ? `Join Lobby ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`
                     : `Spectate Match ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`,
                 description: inviteSession.canJoin
-                    ? `A ${inviteSession.lobbyOptions.visibility} lobby is waiting in session ${inviteSession.id}. Open the game to join the match immediately.`
-                    : `A ${inviteSession.lobbyOptions.visibility} Infinity Hexagonial Tic-Tac-Toe match is underway in session ${inviteSession.id}. Open to spectate it live.`,
+                    ? `${describePlayersWaiting(inviteSession.playerNames, inviteSession.lobbyOptions.visibility)} with ${formatTimeControl(inviteSession.lobbyOptions.timeControl)} time control. Click to join the match.`
+                    : `${describePlayersInMatch(inviteSession.playerNames, inviteSession.lobbyOptions.visibility)} with ${formatTimeControl(inviteSession.lobbyOptions.timeControl)} time control. Open to spectate it live.`,
                 robots: 'noindex, nofollow'
             };
         }
