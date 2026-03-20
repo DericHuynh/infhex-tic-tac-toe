@@ -171,7 +171,7 @@ function LobbySignedInAccount({ account, onViewOwnFinishedGames, onViewAdmin }: 
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="sm:flex-col flex flex-wrap gap-2">
         {isEditingUsername ? (
           <>
             <button

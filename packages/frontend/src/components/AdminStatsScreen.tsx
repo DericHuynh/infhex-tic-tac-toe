@@ -4,6 +4,8 @@ import type {
   AdminStatsResponse,
   AdminStatsWindow
 } from '@ih3t/shared'
+import { formatDateTime } from './LeaderboardPanel'
+import PageCorpus from './PageCorpus'
 
 interface AdminStatsScreenProps {
   stats: AdminStatsResponse | null
@@ -12,13 +14,6 @@ interface AdminStatsScreenProps {
   onBack: () => void
   onRefresh: () => void
   onOpenGame: (gameId: string) => void
-}
-
-function formatDateTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(timestamp)
 }
 
 function formatDuration(durationMs: number) {
@@ -150,45 +145,25 @@ function AdminStatsScreen({
   onBack,
   onRefresh,
   onOpenGame
-}: AdminStatsScreenProps) {
+}: Readonly<AdminStatsScreenProps>) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_28%),radial-gradient(circle_at_right,_rgba(251,191,36,0.14),_transparent_24%),linear-gradient(145deg,_#0f172a,_#111827_42%,_#1f2937)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 sm:py-10">
-        <section className="rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-sky-300/30 bg-sky-400/10 px-4 py-1 text-xs uppercase tracking-[0.32em] text-sky-100">
-                Admin
-              </div>
-              <h1 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:text-5xl">
-                Site Statistics
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Live activity, traffic, and completed-game records across the main reporting windows.
-              </p>
-              {stats && (
-                <div className="mt-4 text-sm text-slate-400">Last updated {formatDateTime(stats.generatedAt)}</div>
-              )}
-            </div>
+    <PageCorpus
+      category={"Admin"}
+      title={"Site Statistics"}
+      description={
+        <>
+          Live activity, traffic, and completed-game records across the main reporting windows.
+          {stats && (
+            <span className="inline-block text-sm text-slate-400">Last updated {formatDateTime(stats.generatedAt)}</span>
+          )}
+        </>
+      }
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={onRefresh}
-                className="rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-900 transition hover:-translate-y-0.5 hover:bg-amber-200"
-              >
-                Refresh
-              </button>
-              <button
-                onClick={onBack}
-                className="rounded-full border border-white/15 bg-white/8 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-white/14"
-              >
-                Back To Lobby
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      onBack={onBack}
+      onRefresh={onRefresh}
+    >
+      <div className={"px-4 sm:px-6 overscroll-contain min-h-0 overflow-auto"}>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard label="Active Games" value={stats?.activeGames.total ?? '...'} tone="accent" />
           <SummaryCard label="Public Games" value={stats?.activeGames.public ?? '...'} />
           <SummaryCard label="Private Games" value={stats?.activeGames.private ?? '...'} />
@@ -213,7 +188,7 @@ function AdminStatsScreen({
           </div>
         ) : null}
       </div>
-    </div>
+    </PageCorpus>
   )
 }
 

@@ -1,4 +1,4 @@
-import type { AccountResponse, AdminStatsResponse, FinishedGameRecord, FinishedGamesPage, SessionInfo } from '@ih3t/shared'
+import type { AccountResponse, AdminLeaderboard, AdminStatsResponse, FinishedGameRecord, FinishedGamesPage, SessionInfo } from '@ih3t/shared'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { fetchJson } from './apiClient'
 
@@ -8,6 +8,7 @@ export type FinishedGamesArchiveView = 'all' | 'mine'
 export const queryKeys = {
   account: ['account'] as const,
   adminStats: (timezoneOffsetMinutes: number) => ['admin', 'stats', timezoneOffsetMinutes] as const,
+  leaderboard: ['leaderboard'] as const,
   availableSessions: ['sessions', 'available'] as const,
   finishedGames: ['finished-games'] as const,
   finishedGamesPage: (view: FinishedGamesArchiveView, page: number, pageSize: number, baseTimestamp: number) =>
@@ -49,6 +50,10 @@ async function fetchAccount() {
 
 async function fetchAdminStats(timezoneOffsetMinutes: number) {
   return await fetchJson<AdminStatsResponse>(`/api/admin/stats?tzOffsetMinutes=${timezoneOffsetMinutes}`)
+}
+
+async function fetchLeaderboard() {
+  return await fetchJson<AdminLeaderboard>('/api/leaderboard')
 }
 
 async function fetchFinishedGames(
@@ -93,7 +98,33 @@ export function useQueryAdminStats(timezoneOffsetMinutes: number, options?: { en
   return useQuery({
     queryKey: queryKeys.adminStats(timezoneOffsetMinutes),
     queryFn: () => fetchAdminStats(timezoneOffsetMinutes),
-    enabled: options?.enabled
+    enabled: options?.enabled,
+    refetchInterval: (query) => {
+      const nextRefreshAt = query.state.data?.leaderboard.nextRefreshAt
+      if (!nextRefreshAt) {
+        return 10 * 60 * 1000
+      }
+
+      return Math.max(1_000, nextRefreshAt - Date.now())
+    },
+    refetchIntervalInBackground: true
+  })
+}
+
+export function useQueryLeaderboard(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.leaderboard,
+    queryFn: fetchLeaderboard,
+    enabled: options?.enabled,
+    refetchInterval: (query) => {
+      const nextRefreshAt = query.state.data?.nextRefreshAt
+      if (!nextRefreshAt) {
+        return 10 * 60 * 1000
+      }
+
+      return Math.max(1_000, nextRefreshAt - Date.now())
+    },
+    refetchIntervalInBackground: true
   })
 }
 

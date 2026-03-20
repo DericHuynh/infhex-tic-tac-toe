@@ -90,21 +90,17 @@ function logRuntimeStatus(
 ) {
     const now = Date.now();
     const sessions = sessionManager.getTerminalSessionStatuses(now);
-    const connectionStatus = socketServerGateway.getConnectionStatus();
+    const connectedClientCount = socketServerGateway.getConnectedClientCount();
     const liveGameCount = sessions.filter((session) => session.state === 'in-game').length;
     const waitingSessionCount = sessions.filter((session) => session.state === 'lobby').length;
-    const reconnectingSuffix = connectionStatus.reconnectingClientCount > 0
-        ? `, ${connectionStatus.reconnectingClientCount} reconnecting`
-        : '';
 
     logger.info({
         event: 'terminal.command.status',
-        connectedClientCount: connectionStatus.connectedClientCount,
-        reconnectingClientCount: connectionStatus.reconnectingClientCount,
+        connectedClientCount,
         liveGameCount,
         waitingSessionCount,
         totalSessionCount: sessions.length
-    }, `Connected clients: ${connectionStatus.connectedClientCount}${reconnectingSuffix}; live games: ${liveGameCount}; waiting sessions: ${waitingSessionCount}`);
+    }, `Connected clients: ${connectedClientCount}; live games: ${liveGameCount}; waiting sessions: ${waitingSessionCount}`);
 
     if (sessions.length === 0) {
         logger.info({

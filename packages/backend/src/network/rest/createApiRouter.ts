@@ -5,6 +5,7 @@ import {
     type AccountProfile,
     type AdminStatsResponse,
     type AccountResponse,
+    type AdminLeaderboard,
     DEFAULT_LOBBY_OPTIONS,
     type CreateSessionResponse,
     type LobbyOptions,
@@ -135,6 +136,11 @@ export class ApiRouter {
             }
 
             res.json(game);
+        });
+
+        router.get('/leaderboard', async (_req, res) => {
+            const response: AdminLeaderboard = await this.adminStatsService.getLeaderboardSnapshot();
+            res.json(response);
         });
 
         router.get('/admin/stats', async (req, res) => {

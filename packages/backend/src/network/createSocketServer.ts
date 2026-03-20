@@ -254,11 +254,8 @@ export class SocketServerGateway {
         this.io = io;
     }
 
-    public getConnectionStatus() {
-        return {
-            connectedClientCount: this.io?.sockets.sockets.size ?? 0,
-            reconnectingClientCount: 0
-        };
+    public getConnectedClientCount() {
+        return this.io?.sockets.sockets.size ?? 0;
     }
 
     private getParticipation(socketId: string): Participation | undefined {

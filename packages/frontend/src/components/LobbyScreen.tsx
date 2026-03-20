@@ -12,6 +12,7 @@ interface LobbyScreenProps {
   onHostGame: (request: CreateSessionRequest) => void
   onJoinGame: (sessionId: string) => void
   onViewFinishedGames: () => void
+  onViewLeaderboard: () => void
   onViewOwnFinishedGames: () => void
   onViewAdmin: () => void
 }
@@ -42,9 +43,10 @@ function LobbyScreen({
   onHostGame,
   onJoinGame,
   onViewFinishedGames,
+  onViewLeaderboard,
   onViewOwnFinishedGames,
   onViewAdmin
-}: LobbyScreenProps) {
+}: Readonly<LobbyScreenProps>) {
   const isPlayingDisabled = !isConnected || Boolean(shutdown)
   const [now, setNow] = useState(() => Date.now())
   const [isCreateLobbyDialogOpen, setIsCreateLobbyDialogOpen] = useState(false)
@@ -87,11 +89,11 @@ function LobbyScreen({
                 Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align six in a row.
               </p>
 
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:flex sm:flex-wrap sm:gap-4">
+              <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 grid-cols-1 sm:grid-cols-2">
                 <button
                   onClick={() => setIsCreateLobbyDialogOpen(true)}
                   disabled={isPlayingDisabled}
-                  className={`rounded-full px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition sm:px-7 sm:text-base sm:tracking-[0.18em] ${!isPlayingDisabled
+                  className={`sm:col-span-2 rounded-full px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition sm:px-7 sm:text-base sm:tracking-[0.18em] ${!isPlayingDisabled
                     ? 'bg-amber-300 text-slate-900 shadow-[0_10px_35px_rgba(251,191,36,0.35)] hover:-translate-y-0.5 hover:bg-amber-200'
                     : 'cursor-not-allowed bg-slate-500/60 text-slate-200'
                     }`}
@@ -102,7 +104,13 @@ function LobbyScreen({
                   onClick={onViewFinishedGames}
                   className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:-translate-y-0.5 hover:bg-white/16 sm:px-7 sm:text-base sm:tracking-[0.18em]"
                 >
-                  Review Matches
+                  Matchhistory
+                </button>
+                <button
+                  onClick={onViewLeaderboard}
+                  className="rounded-full border border-sky-300/25 bg-sky-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-400/20 sm:px-7 sm:text-base sm:tracking-[0.18em]"
+                >
+                  Leaderboard
                 </button>
                 {!isConnected && (
                   <div className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
@@ -141,45 +149,45 @@ function LobbyScreen({
                   {liveSessions.map((session) => {
                     const canJoin = canJoinSession(session)
                     return (
-                    <div
-                      key={session.id}
-                      className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-lg sm:rounded-3xl sm:p-5 lg:flex-row lg:items-center lg:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${canJoin
-                            ? 'bg-emerald-400/15 text-emerald-200'
-                            : 'bg-sky-400/15 text-sky-200'
-                            }`}>
-                            {canJoin ? 'Open Lobby' : 'Active Game'}
-                          </span>
-                          <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                            {formatTimeControl(session.gameOptions.timeControl)}
-                          </span>
-                        </div>
-                        <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
-                        <div className="mt-2 text-sm text-slate-400">
-                          {formatLobbyPlayers(session.players)}
-                        </div>
-                        {!canJoin && session.startedAt && (
-                          <div className="text-sm text-slate-400">
-                            In game for {formatLiveDuration(session.startedAt, now)}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => onJoinGame(session.id)}
-                        disabled={!isConnected}
-                        className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition lg:shrink-0 ${!isConnected
-                          ? 'cursor-not-allowed bg-slate-500/60 text-slate-200'
-                          : canJoin
-                            ? 'bg-sky-400 text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.28)] hover:-translate-y-0.5 hover:bg-sky-300'
-                            : 'border border-white/15 bg-white/8 text-white hover:-translate-y-0.5 hover:bg-white/14'
-                          }`}
+                      <div
+                        key={session.id}
+                        className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-lg sm:rounded-3xl sm:p-5 lg:flex-row lg:items-center lg:justify-between"
                       >
-                        {canJoin ? 'Join Lobby' : 'Spectate'}
-                      </button>
-                    </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${canJoin
+                              ? 'bg-emerald-400/15 text-emerald-200'
+                              : 'bg-sky-400/15 text-sky-200'
+                              }`}>
+                              {canJoin ? 'Open Lobby' : 'Active Game'}
+                            </span>
+                            <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+                              {formatTimeControl(session.gameOptions.timeControl)}
+                            </span>
+                          </div>
+                          <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
+                          <div className="mt-2 text-sm text-slate-400">
+                            {formatLobbyPlayers(session.players)}
+                          </div>
+                          {!canJoin && session.startedAt && (
+                            <div className="text-sm text-slate-400">
+                              In game for {formatLiveDuration(session.startedAt, now)}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => onJoinGame(session.id)}
+                          disabled={!isConnected}
+                          className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition lg:shrink-0 ${!isConnected
+                            ? 'cursor-not-allowed bg-slate-500/60 text-slate-200'
+                            : canJoin
+                              ? 'bg-sky-400 text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.28)] hover:-translate-y-0.5 hover:bg-sky-300'
+                              : 'border border-white/15 bg-white/8 text-white hover:-translate-y-0.5 hover:bg-white/14'
+                            }`}
+                        >
+                          {canJoin ? 'Join Lobby' : 'Spectate'}
+                        </button>
+                      </div>
                     )
                   })}
                 </div>

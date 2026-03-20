@@ -313,6 +313,31 @@ export class AuthRepository implements Adapter {
         return this.mapAccountUserProfile(updatedUser);
     }
 
+    async getUserProfilesByIds(userIds: string[]): Promise<Map<string, AccountUserProfile>> {
+        const validEntries = userIds.flatMap((userId) => {
+            const objectId = this.parseObjectId(userId);
+            return objectId ? [{ userId, objectId }] : [];
+        });
+
+        if (validEntries.length === 0) {
+            return new Map();
+        }
+
+        const collection = await this.getUsersCollection();
+        const documents = await collection.find({
+            _id: {
+                $in: validEntries.map(({ objectId }) => objectId)
+            }
+        }).toArray();
+
+        return new Map(
+            documents.map((document) => {
+                const profile = this.mapAccountUserProfile(this.mapUserDocument(document));
+                return [profile.id, profile] as const;
+            })
+        );
+    }
+
     private async getUsersCollection(): Promise<Collection<AuthUserDocument>> {
         if (this.usersCollectionPromise) {
             return this.usersCollectionPromise;

@@ -63,6 +63,14 @@ export interface GameHistoryAdminWindowStats {
     longestGameInDuration: AdminLongestGameInDuration | null;
 }
 
+export interface PlayerLeaderboardStats {
+    profileId: string;
+    displayName: string;
+    gamesPlayed: number;
+    gamesWon: number;
+    winRatio: number;
+}
+
 const mongoDbName = process.env.MONGODB_DB_NAME ?? 'ih3t';
 const mongoCollectionName = process.env.MONGODB_GAME_HISTORY_COLLECTION ?? 'gameHistory';
 
@@ -283,6 +291,90 @@ export class GameHistoryRepository {
                 ? this.mapAdminLongestGameInDuration(longestGameInDurationDocument)
                 : null
         };
+    }
+
+    async getTopPlayerStats(limit = 10): Promise<PlayerLeaderboardStats[]> {
+        const collection = await this.getCollection();
+        const normalizedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+        const pipeline = [
+            {
+                $match: {
+                    finishedAt: {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $unwind: '$players'
+            },
+            {
+                $match: {
+                    'players.profileId': {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $sort: {
+                    finishedAt: -1,
+                    id: -1
+                }
+            },
+            {
+                $group: {
+                    _id: '$players.profileId',
+                    profileId: { $first: '$players.profileId' },
+                    displayName: { $first: '$players.displayName' },
+                    gamesPlayed: { $sum: 1 },
+                    gamesWon: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$players.playerId', '$gameResult.winningPlayerId'] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    profileId: 1,
+                    displayName: 1,
+                    gamesPlayed: 1,
+                    gamesWon: 1,
+                    winRatio: {
+                        $cond: [
+                            { $eq: ['$gamesPlayed', 0] },
+                            0,
+                            { $divide: ['$gamesWon', '$gamesPlayed'] }
+                        ]
+                    }
+                }
+            },
+            {
+                $sort: {
+                    gamesWon: -1,
+                    winRatio: -1,
+                    gamesPlayed: -1,
+                    displayName: 1,
+                    profileId: 1
+                }
+            },
+            {
+                $limit: normalizedLimit
+            }
+        ];
+        const leaderboard = await collection.aggregate<PlayerLeaderboardStats>(pipeline).toArray();
+
+        return leaderboard.map((player) => ({
+            profileId: player.profileId,
+            displayName: player.displayName,
+            gamesPlayed: player.gamesPlayed,
+            gamesWon: player.gamesWon,
+            winRatio: Number(player.winRatio.toFixed(4))
+        }));
     }
 
     private async getCollection(): Promise<Collection<GameHistoryDocument>> {

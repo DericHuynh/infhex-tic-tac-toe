@@ -343,6 +343,24 @@ export const zAdminStatsWindow = z.object({
 });
 export type AdminStatsWindow = z.infer<typeof zAdminStatsWindow>;
 
+export const zAdminLeaderboardPlayer = z.object({
+    profileId: zIdentifier,
+    displayName: z.string(),
+    image: z.string().nullable(),
+    gamesPlayed: z.number().int().nonnegative(),
+    gamesWon: z.number().int().nonnegative(),
+    winRatio: z.number().min(0).max(1)
+});
+export type AdminLeaderboardPlayer = z.infer<typeof zAdminLeaderboardPlayer>;
+
+export const zAdminLeaderboard = z.object({
+    generatedAt: zTimestamp,
+    nextRefreshAt: zTimestamp,
+    refreshIntervalMs: z.number().int().positive(),
+    players: z.array(zAdminLeaderboardPlayer)
+});
+export type AdminLeaderboard = z.infer<typeof zAdminLeaderboard>;
+
 export const zAdminStatsResponse = z.object({
     generatedAt: zTimestamp,
     activeGames: z.object({
@@ -351,6 +369,7 @@ export const zAdminStatsResponse = z.object({
         private: z.number().int().nonnegative()
     }),
     connectedClients: z.number().int().nonnegative(),
+    leaderboard: zAdminLeaderboard,
     intervals: z.object({
         sinceMidnight: zAdminStatsWindow,
         last24Hours: zAdminStatsWindow,
