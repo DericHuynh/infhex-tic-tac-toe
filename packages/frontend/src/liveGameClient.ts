@@ -50,7 +50,8 @@ export function startLiveGameClient() {
     auth: {
       deviceId
     },
-    withCredentials: true
+    withCredentials: true,
+    transports: ["websocket"]
   })
 
   socket.on('connect', () => {
