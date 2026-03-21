@@ -8,7 +8,6 @@ interface FinishedGameReviewScreenProps {
   game: FinishedGameRecord | null
   isLoading: boolean
   errorMessage: string | null
-  onBack: () => void
   onRetry: () => void
 }
 
@@ -16,22 +15,21 @@ function FinishedGameReviewScreen({
   game,
   isLoading,
   errorMessage,
-  onBack,
   onRetry
 }: Readonly<FinishedGameReviewScreenProps>) {
   if (isLoading) {
-    return <FinishedGameReviewLoading onBack={onBack} onRetry={onRetry} />
+    return <FinishedGameReviewLoading onRetry={onRetry} />
   }
 
   if (errorMessage) {
-    return <FinishedGameReviewError errorMessage={errorMessage} onBack={onBack} onRetry={onRetry} />
+    return <FinishedGameReviewError errorMessage={errorMessage} onRetry={onRetry} />
   }
 
   if (!game) {
-    return <FinishedGameReviewNotFound onBack={onBack} onRetry={onRetry} />
+    return <FinishedGameReviewNotFound onRetry={onRetry} />
   }
 
-  return <FinishedGameReplayView game={game} onBack={onBack} onRetry={onRetry} />
+  return <FinishedGameReplayView game={game} onRetry={onRetry} />
 }
 
 export default FinishedGameReviewScreen

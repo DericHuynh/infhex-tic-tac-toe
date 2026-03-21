@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router'
+import { RouterProvider } from 'react-router'
 import './index.css'
-import App from './App'
+import { appRouter } from './App'
 import { queryClient } from './queryClient'
 import { installSoundEffects } from './soundEffects'
 
@@ -17,10 +17,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={appRouter} />
+    </QueryClientProvider>
   </StrictMode>,
 )

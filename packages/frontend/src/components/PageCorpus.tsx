@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 function RefreshIcon() {
     return (
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current stroke-[1.8]">
@@ -16,10 +18,10 @@ function BackIcon() {
 }
 
 interface PageCorpusProperties {
-    category: React.ReactNode,
-    title: React.ReactNode,
-    description?: React.ReactNode,
-    children?: React.ReactNode,
+    category: ReactNode,
+    title: ReactNode,
+    description?: ReactNode,
+    children?: ReactNode,
 
     back?: string,
     onBack?: () => void,
@@ -29,9 +31,9 @@ interface PageCorpusProperties {
 
 const PageCorpus = ({ category, title, description, children, back, onBack, onRefresh }: PageCorpusProperties) => {
     return (
-        <div className="h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.16),_transparent_24%),linear-gradient(135deg,_#020617,_#0f172a_45%,_#111827)] text-white">
-            <div className="mx-auto flex h-full min-h-0 w-full max-w-[92rem] flex-col gap-4">
-                <div className="shrink-0 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between px-4 py-4 sm:px-6 sm:py-6">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden text-white">
+            <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 py-4 sm:py-6">
+                <div className="shrink-0 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between px-4 sm:px-6">
                     <div className="min-w-0">
                         <div className="flex items-start justify-between gap-3 lg:block">
                             <div>

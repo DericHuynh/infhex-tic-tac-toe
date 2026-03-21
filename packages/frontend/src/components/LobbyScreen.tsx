@@ -2,7 +2,6 @@ import type { CreateSessionRequest, LobbyInfo, ShutdownState } from '@ih3t/share
 import { useEffect, useState } from 'react'
 import CreateLobbyDialog from './CreateLobbyDialog'
 import { formatTimeControl } from '../lobbyOptions'
-import LobbyAccountBox from './LobbyAccountBox'
 import ScreenFooter from './ScreenFooter'
 
 interface LobbyScreenProps {
@@ -42,10 +41,6 @@ function LobbyScreen({
   liveSessions,
   onHostGame,
   onJoinGame,
-  onViewFinishedGames,
-  onViewLeaderboard,
-  onViewOwnFinishedGames,
-  onViewAdmin
 }: Readonly<LobbyScreenProps>) {
   const isPlayingDisabled = !isConnected || Boolean(shutdown)
   const [now, setNow] = useState(() => Date.now())
@@ -62,145 +57,126 @@ function LobbyScreen({
   const canJoinSession = (session: LobbyInfo) => session.startedAt === null && session.playerNames.length < 2
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
+    <div className="flex flex-1 flex-col px-4 py-4 text-white sm:px-6 sm:py-6">
       <CreateLobbyDialog
         isOpen={isCreateLobbyDialogOpen}
         onClose={() => setIsCreateLobbyDialogOpen(false)}
         onCreateLobby={onHostGame}
       />
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-between px-4 py-6 sm:px-6 sm:py-10">
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8">
-          <section className="relative flex overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:rounded-[2rem] sm:p-8 md:p-10 sm:h-[34rem]">
-            <div className="absolute -right-10 -top-12 hidden h-36 w-36 rounded-full bg-amber-300/20 blur-3xl sm:block" />
-            <div className="absolute bottom-0 left-0 hidden h-32 w-32 rounded-full bg-sky-400/20 blur-3xl sm:block" />
-
-            <div className="relative flex flex-1 flex-col justify-center">
-              <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-amber-100 sm:px-4 sm:text-xs sm:tracking-[0.35em]">
-                Two Players
-              </div>
-              <h1 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl lg:text-6xl">
-                Infinity
-                <br />
-                Hexagonal
-                <br />
-                Tic-Tac-Toe
-              </h1>
-              <p className="mt-5 max-w-xl text-sm leading-6 text-slate-200 sm:mt-6 sm:text-base sm:leading-7 lg:text-lg">
-                Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align six in a row.
-              </p>
-
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 grid-cols-1 sm:grid-cols-2">
-                <button
-                  onClick={() => setIsCreateLobbyDialogOpen(true)}
-                  disabled={isPlayingDisabled}
-                  className={`sm:col-span-2 rounded-full px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition sm:px-7 sm:text-base sm:tracking-[0.18em] ${!isPlayingDisabled
-                    ? 'bg-amber-300 text-slate-900 shadow-[0_10px_35px_rgba(251,191,36,0.35)] hover:-translate-y-0.5 hover:bg-amber-200'
-                    : 'cursor-not-allowed bg-slate-500/60 text-slate-200'
-                    }`}
-                >
-                  {shutdown ? 'Restart Pending' : 'Host Match'}
-                </button>
-                <button
-                  onClick={onViewFinishedGames}
-                  className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:-translate-y-0.5 hover:bg-white/16 sm:px-7 sm:text-base sm:tracking-[0.18em]"
-                >
-                  Matchhistory
-                </button>
-                <button
-                  onClick={onViewLeaderboard}
-                  className="rounded-full border border-sky-300/25 bg-sky-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-400/20 sm:px-7 sm:text-base sm:tracking-[0.18em]"
-                >
-                  Leaderboard
-                </button>
-                {!isConnected && (
-                  <div className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
-                    Not connected to server
-                  </div>
-                )}
-                {shutdown && (
-                  <div className="inline-flex items-center rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm font-medium text-amber-100">
-                    New matches are disabled until the restart completes.
-                  </div>
-                )}
-              </div>
+      <div className="mx-auto flex gap-4 flex-col lg:flex-row lg:gap-8 lg:min-h-0 h-full flex-1 mt-4 lg:mt-[8vh]">
+        <section className="relative flex rounded-[1.75rem] border-white/10 bg-white/6 p-6 sm:min-h-[34rem] sm:rounded-[2rem] sm:p-8 md:p-10 sm:h-[34rem]">
+          <div className="relative flex flex-1 flex-col justify-center">
+            <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-amber-100 sm:px-4 sm:text-xs sm:tracking-[0.35em]">
+              Two Players
             </div>
-          </section>
+            <h1 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl lg:text-6xl">
+              Infinity
+              <br />
+              Hexagonal
+              <br />
+              Tic-Tac-Toe
+            </h1>
+            <p className="mt-5 max-w-xl text-sm leading-6 text-slate-200 sm:mt-6 sm:text-base sm:leading-7 lg:text-lg">
+              Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align six in a row.
+            </p>
 
-          <section className="rounded-[2rem] border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-sky-200/80">Live Sessions</p>
-                <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Public Matches</h2>
-              </div>
-              <div className="rounded-2xl bg-white/5 px-3 py-2 text-right sm:px-4 sm:py-3">
-                <div className="text-2xl font-bold text-white">{liveSessions.length}</div>
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-300">Live Now</div>
-              </div>
-            </div>
-
-            <div className="mt-5 sm:mt-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1 sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain sm:pr-1">
-              {liveSessions.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 px-6 py-10 text-center text-slate-300">
-                  <p className="text-lg font-semibold text-white">No live sessions are available right now.</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">Create a new match and the lobby list will update for everyone automatically.</p>
+            <div className="mt-6 flex flex-col gap-4">
+              <button
+                onClick={() => setIsCreateLobbyDialogOpen(true)}
+                disabled={isPlayingDisabled}
+                className={`sm:col-span-2 rounded-full px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition sm:px-7 sm:text-base sm:tracking-[0.18em] ${!isPlayingDisabled
+                  ? 'bg-amber-300 text-slate-900 shadow-[0_10px_35px_rgba(251,191,36,0.35)] hover:-translate-y-0.5 hover:bg-amber-200'
+                  : 'cursor-not-allowed bg-slate-500/60 text-slate-200'
+                  }`}
+              >
+                {shutdown ? 'Restart Pending' : 'Host Match'}
+              </button>
+              {!isConnected && (
+                <div className="inline-flex items-center rounded-full border text-center border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
+                  Not connected to server
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {liveSessions.map((session) => {
-                    const canJoin = canJoinSession(session)
-                    return (
-                      <div
-                        key={session.id}
-                        className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-lg sm:rounded-3xl sm:p-5 lg:flex-row lg:items-center lg:justify-between"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${canJoin
-                              ? 'bg-emerald-400/15 text-emerald-200'
-                              : 'bg-sky-400/15 text-sky-200'
-                              }`}>
-                              {canJoin ? 'Open Lobby' : 'Active Game'}
-                            </span>
-                            <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                              {formatTimeControl(session.timeControl)}
-                            </span>
-                          </div>
-                          <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
-                          <div className="mt-2 text-sm text-slate-400">
-                            {formatLobbyPlayers(session.playerNames)}
-                          </div>
-                          {!canJoin && session.startedAt && (
-                            <div className="text-sm text-slate-400">
-                              In game for {formatLiveDuration(session.startedAt, now)}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => onJoinGame(session.id)}
-                          disabled={!isConnected}
-                          className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition lg:shrink-0 ${!isConnected
-                            ? 'cursor-not-allowed bg-slate-500/60 text-slate-200'
-                            : canJoin
-                              ? 'bg-sky-400 text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.28)] hover:-translate-y-0.5 hover:bg-sky-300'
-                              : 'border border-white/15 bg-white/8 text-white hover:-translate-y-0.5 hover:bg-white/14'
-                            }`}
-                        >
-                          {canJoin ? 'Join Lobby' : 'Spectate'}
-                        </button>
-                      </div>
-                    )
-                  })}
+              )}
+              {shutdown && (
+                <div className="inline-flex items-center rounded-full border text-center border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm font-medium text-amber-100">
+                  New matches are disabled until the restart completes.
                 </div>
               )}
             </div>
-          </section>
+          </div>
+        </section>
 
-          <LobbyAccountBox onViewOwnFinishedGames={onViewOwnFinishedGames} onViewAdmin={onViewAdmin} />
-        </div>
+        <section className="rounded-[2rem] border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-sky-200/80">Live Sessions</p>
+              <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Public Matches</h2>
+            </div>
+            <div className="rounded-2xl bg-white/5 px-3 py-2 text-right sm:px-4 sm:py-3">
+              <div className="text-2xl font-bold text-white">{liveSessions.length}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-300">Live Now</div>
+            </div>
+          </div>
 
-        <ScreenFooter />
+          <div className="mt-5 sm:mt-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1 sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:overscroll-contain sm:pr-1">
+            {liveSessions.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 px-6 py-10 text-center text-slate-300">
+                <p className="text-lg font-semibold text-white">No live sessions are available right now.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">Create a new match and the lobby list will update for everyone automatically.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {liveSessions.map((session) => {
+                  const canJoin = canJoinSession(session)
+                  return (
+                    <div
+                      key={session.id}
+                      className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-lg sm:rounded-3xl sm:p-5 lg:flex-row lg:items-center lg:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${canJoin
+                            ? 'bg-emerald-400/15 text-emerald-200'
+                            : 'bg-sky-400/15 text-sky-200'
+                            }`}>
+                            {canJoin ? 'Open Lobby' : 'Active Game'}
+                          </span>
+                          <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+                            {formatTimeControl(session.timeControl)}
+                          </span>
+                        </div>
+                        <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
+                        <div className="mt-2 text-sm text-slate-400">
+                          {formatLobbyPlayers(session.playerNames)}
+                        </div>
+                        {!canJoin && session.startedAt && (
+                          <div className="text-sm text-slate-400">
+                            In game for {formatLiveDuration(session.startedAt, now)}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onJoinGame(session.id)}
+                        disabled={!isConnected}
+                        className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition lg:shrink-0 ${!isConnected
+                          ? 'cursor-not-allowed bg-slate-500/60 text-slate-200'
+                          : canJoin
+                            ? 'bg-sky-400 text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.28)] hover:-translate-y-0.5 hover:bg-sky-300'
+                            : 'border border-white/15 bg-white/8 text-white hover:-translate-y-0.5 hover:bg-white/14'
+                          }`}
+                      >
+                        {canJoin ? 'Join Lobby' : 'Spectate'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
-    </div>
+
+      <ScreenFooter />
+    </div >
   )
 }
 

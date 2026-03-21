@@ -8,7 +8,6 @@ import FinishedGameReviewLayout from './FinishedGameReviewLayout'
 
 interface FinishedGameReplayViewProps {
   game: FinishedGameRecord
-  onBack: () => void
   onRetry: () => void
 }
 
@@ -64,7 +63,6 @@ function buildReplayBoardState(game: FinishedGameRecord, visibleMoveCount: numbe
 
 function FinishedGameReplayView({
   game,
-  onBack,
   onRetry
 }: Readonly<FinishedGameReplayViewProps>) {
   const [visibleMoveCount, setVisibleMoveCount] = useState(game.moves.length)
@@ -128,7 +126,7 @@ function FinishedGameReplayView({
   }
 
   return (
-    <FinishedGameReviewLayout onBack={onBack} onRetry={onRetry}>
+    <FinishedGameReviewLayout onRetry={onRetry}>
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1.5fr)_24rem]">
         <section className="relative min-h-[34rem] overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/75 shadow-[0_20px_80px_rgba(15,23,42,0.45)] xl:min-h-0">
           <GameBoardCanvas

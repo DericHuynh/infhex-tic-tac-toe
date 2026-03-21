@@ -38,22 +38,13 @@ export function buildFinishedGamesPath(
   return `${pathname}?${searchParams.toString()}`
 }
 
-export function buildFinishedGamePath(
-  gameId: string,
-  archivePage: number,
-  archiveBaseTimestamp: number,
-  archiveView: FinishedGamesArchiveView = 'all'
+export function buildFinishedGamePath(gameId: string, archiveView: FinishedGamesArchiveView = 'all'
 ) {
   const searchParams = new URLSearchParams()
-  searchParams.set('at', String(archiveBaseTimestamp))
-
-  if (archivePage > 1) {
-    searchParams.set('page', String(archivePage))
-  }
-
   const pathname = archiveView === 'mine'
     ? `/account/games/${encodeURIComponent(gameId)}`
     : `/games/${encodeURIComponent(gameId)}`
+
   return `${pathname}?${searchParams.toString()}`
 }
 

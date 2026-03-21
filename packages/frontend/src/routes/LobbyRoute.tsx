@@ -13,7 +13,6 @@ function LobbyRoute() {
   const inviteSessionId = searchParams.get('join')
   const connection = useLiveGameStore(state => state.connection)
   const shutdown = useLiveGameStore(state => state.shutdown)
-  const liveScreen = useLiveGameStore(state => state.screen)
   const availableSessionsQuery = useQueryAvailableSessions({ enabled: true })
 
   useEffect(() => {
@@ -38,10 +37,6 @@ function LobbyRoute() {
 
   const joinLiveGame = (sessionId: string) => {
     void navigate(buildSessionPath(sessionId))
-  }
-
-  if (liveScreen.kind !== 'none') {
-    return <Navigate to={buildSessionPath(liveScreen.sessionId)} replace />
   }
 
   return (

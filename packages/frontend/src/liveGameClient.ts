@@ -234,7 +234,6 @@ export function returnToLobby() {
   }
 
   state.resetToLobby()
-  void fetchAvailableSessions()
 }
 
 export function placeCell(x: number, y: number) {

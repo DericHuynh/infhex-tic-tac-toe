@@ -1,0 +1,304 @@
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router'
+import { toast } from 'react-toastify'
+import { signInWithDiscord, signOutAccount } from '../authClient'
+import { useQueryAccount } from '../queryHooks'
+import AccountPicture from './AccountPicture'
+
+function showErrorToast(message: string) {
+  toast.error(message, {
+    toastId: `error:${message}`
+  })
+}
+
+function NavigationLink({
+  to,
+  label,
+  end = false
+}: Readonly<{
+  to: string
+  label: string
+  end?: boolean
+}>) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium transition ${isActive
+        ? 'bg-sky-400/12 text-sky-100'
+        : 'text-slate-300 hover:bg-sky-400/8 hover:text-sky-50'
+        }`}
+    >
+      {label}
+    </NavLink>
+  )
+}
+
+function MenuLink({
+  to,
+  label,
+  onSelect
+}: Readonly<{
+  to: string
+  label: string
+  onSelect: () => void
+}>) {
+  return (
+    <NavLink
+      to={to}
+      onClick={onSelect}
+      className={({ isActive }) => `block rounded-xl px-3 py-2.5 text-sm transition ${isActive
+        ? 'bg-sky-400/12 text-sky-100'
+        : 'text-slate-300 hover:bg-sky-400/8 hover:text-sky-50'
+        }`}
+    >
+      {label}
+    </NavLink>
+  )
+}
+
+function MobileNavLink({
+  to,
+  label,
+  end = false,
+  onSelect
+}: Readonly<{
+  to: string
+  label: string
+  end?: boolean
+  onSelect: () => void
+}>) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onSelect}
+      className={({ isActive }) => `block rounded-xl px-3 py-2.5 text-sm transition ${isActive
+        ? 'bg-amber-300/14 text-amber-100'
+        : 'text-slate-300 hover:bg-amber-300/8 hover:text-amber-50'
+        }`}
+    >
+      {label}
+    </NavLink>
+  )
+}
+
+function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
+  const location = useLocation()
+  const accountQuery = useQueryAccount({ enabled: true })
+  const account = accountQuery.data?.user ?? null
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const headerRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false)
+    setIsMobileMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!isAccountMenuOpen && !isMobileMenuOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false)
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [isAccountMenuOpen, isMobileMenuOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAccountMenuOpen(false)
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const handleSignIn = async () => {
+    try {
+      await signInWithDiscord()
+    } catch (error) {
+      console.error('Failed to start Discord sign in:', error)
+      showErrorToast(error instanceof Error ? error.message : 'Failed to start Discord sign in.')
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOutAccount()
+    } catch (error) {
+      console.error('Failed to sign out:', error)
+      showErrorToast(error instanceof Error ? error.message : 'Failed to sign out.')
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-auto flex min-h-dvh flex-col bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.14),_transparent_26%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(135deg,_#020617,_#0f172a_45%,_#111827)] text-white">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b border-sky-300/10 bg-slate-950/85 backdrop-blur-xl">
+        <div className="mx-auto flex flex-row w-full max-w-[92rem] gap-4 px-2 py-2 lg:py-4 lg:px-6 items-center justify-between">
+          <NavLink
+            to="/"
+            end
+            className="inline-flex items-center gap-3 rounded-lg px-1 py-1 text-white transition hover:text-sky-100"
+          >
+            <img
+              src="/favicon.png"
+              alt=""
+              aria-hidden="true"
+              className="h-9 w-9 flex-shrink-0 rounded-lg"
+            />
+            <span className="min-w-0 text-left leading-tight">
+              <span className="block text-[11px] font-semibold text-sky-100 sm:hidden">
+                Infinity Hexagonal
+              </span>
+              <span className="block text-[11px] font-semibold text-sky-100 sm:hidden">
+                Tic-Tac-Toe
+              </span>
+              <span className="hidden text-sm font-semibold text-sky-100 sm:block">
+                Infinity Hexagonal Tic-Tac-Toe
+              </span>
+            </span>
+          </NavLink>
+
+          <div className="flex flex-row items-center gap-4 ml-auto">
+            <nav className="hidden lg:flex flex-wrap items-center gap-2" aria-label="Primary">
+              <NavigationLink to="/games" label="Match History" />
+              <NavigationLink to="/leaderboard" label="Leaderboard" />
+            </nav>
+
+            {accountQuery.isLoading ? (
+              <div className="self-start rounded-lg px-3 py-2 text-sm text-slate-400 lg:self-auto">
+                Loading Account
+              </div>
+            ) : account ? (
+              <div className="self-start lg:relative lg:self-auto">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isAccountMenuOpen}
+                  onClick={() => { setIsAccountMenuOpen((open) => !open); setIsMobileMenuOpen(false) }}
+                  className="inline-flex items-center gap-3 rounded-lg bg-sky-400/8 px-3 py-2 text-left transition hover:bg-sky-400/12"
+                >
+                  <AccountPicture username={account.username} image={account.image} />
+
+                  <div className="min-w-0 hidden sm:block">
+                    <div className="truncate text-sm font-semibold text-white">{account.username}</div>
+                    <div className="text-xs text-sky-200/70">Account</div>
+                  </div>
+
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    className={`hidden sm:block h-4 w-4 text-slate-300 transition ${isAccountMenuOpen ? 'rotate-180' : ''}`}
+                  >
+                    <path
+                      d="M5.5 7.5 10 12l4.5-4.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                </button>
+                {isAccountMenuOpen && (
+                  <div className="border-t mt-2 lg:mt-4 border-white/10 px-4 py-4 sm:px-6 absolute bg-slate-950 lg:p-0 lg:border-none lg:bg-transparent lg:mt-0 right-0 left-0 lg:left-auto lg:w-[18em] lg:text-right z-50">
+                    {/* <div className="px-4 pb-4 sm:px-6 lg:max-w-sm w-full"> */}
+                    <div
+                      role="menu"
+                      className=" bg-slate-950 mx-auto w-full max-w-[92rem] rounded-2xl lg:border border-sky-300/10 bg-slate-950/96 p-2 shadow-[0_18px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl"
+                    >
+                      <div className="space-y-1">
+                        <MenuLink to="/account/profile" label="Profile" onSelect={() => setIsAccountMenuOpen(false)} />
+                        <MenuLink to="/account/games" label="Match History" onSelect={() => setIsAccountMenuOpen(false)} />
+                        {account.role === 'admin' && (
+                          <MenuLink to="/admin" label="Admin Controls" onSelect={() => setIsAccountMenuOpen(false)} />
+                        )}
+                      </div>
+
+                      <div className="mt-2 border-t border-amber-300/10 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAccountMenuOpen(false)
+                            void handleSignOut()
+                          }}
+                          className="block w-full rounded-xl px-3 py-2.5 text-left lg:text-right text-sm text-rose-100 transition hover:bg-rose-500/10"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => void handleSignIn()}
+                className="self-start rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#6f7cff] lg:self-auto"
+              >
+                Sign In With Discord
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={isMobileMenuOpen}
+            onClick={() => {
+              setIsAccountMenuOpen(false)
+              setIsMobileMenuOpen((open) => !open)
+            }}
+            className="lg:hidden inline-flex items-center justify-center rounded-lg bg-amber-300/8 p-2.5 text-amber-50 transition hover:bg-amber-300/12"
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5">
+              {isMobileMenuOpen ? (
+                <path
+                  d="M5 5l10 10M15 5 5 15"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                />
+              ) : (
+                <path
+                  d="M4 6h12M4 10h12M4 14h12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
+
+        {isMobileMenuOpen && (
+          <div className="border-t border-white/10 px-4 py-4 sm:px-6 lg:hidden absolute bg-slate-950 right-0 left-0 z-50 shadow-[0_18px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl">
+            <div className="mx-auto w-full max-w-[92rem] space-y-2 rounded-2xl p-2 shadow-[0_18px_50px_rgba(2,6,23,0.4)]">
+              <MobileNavLink to="/games" label="Match History" onSelect={() => setIsMobileMenuOpen(false)} />
+              <MobileNavLink to="/leaderboard" label="Leaderboard" onSelect={() => setIsMobileMenuOpen(false)} />
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className={`mx-auto flex w-full ${limitWidth ? "max-w-[92rem]" : ""} min-h-0 flex-1 flex-col`}>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+
+export default CommonPageLayout

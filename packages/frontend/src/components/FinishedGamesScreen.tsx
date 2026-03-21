@@ -11,7 +11,6 @@ interface FinishedGamesScreenProps {
   showSignInHint: boolean
   isLoading: boolean
   errorMessage: string | null
-  onBack: () => void
   onOpenGame: (gameId: string) => void
   onChangePage: (page: number) => void
   onRefresh: () => void
@@ -94,10 +93,6 @@ function getPersonalResultLabel(game: FinishedGameSummary, currentProfileId: str
   }
 }
 
-function getMatchupLabel(game: FinishedGameSummary) {
-  return game.players.map((player) => getPlayerLabel(game.players, player.playerId)).join(' vs ')
-}
-
 function getResultPresentation(
   game: FinishedGameSummary,
   isOwnArchive: boolean,
@@ -149,23 +144,6 @@ function getVisiblePageNumbers(currentPage: number, totalPages: number) {
   return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index)
 }
 
-function RefreshIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current stroke-[1.8]">
-      <path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16.5 4.5v3.7h-3.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function BackIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current stroke-[1.8]">
-      <path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function FinishedGamesScreen({
   archive,
   archiveView,
@@ -174,7 +152,6 @@ function FinishedGamesScreen({
   showSignInHint,
   isLoading,
   errorMessage,
-  onBack,
   onOpenGame,
   onChangePage,
   onRefresh
@@ -199,7 +176,6 @@ function FinishedGamesScreen({
         : 'Browse completed matches and open any game to step through every move on the board.'}
 
       onRefresh={onRefresh}
-      onBack={onBack}
     >
       <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-[auto_auto_1fr] px-4 sm:px-6">
         <div className="inline-flex items-center rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-xs text-slate-200 sm:px-4 sm:py-2 sm:text-sm">
@@ -223,7 +199,7 @@ function FinishedGamesScreen({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-4 sm:px-6 pb-4 sm:pb-6">
+      <div className="min-h-0 flex-1 overflow-hidden px-4 sm:px-6">
         <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-0 sm:rounded-[2rem] sm:border sm:border-white/10 sm:bg-slate-950/55 sm:p-6 sm:shadow-[0_20px_80px_rgba(15,23,42,0.45)] sm:backdrop-blur">
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/5 px-6 py-12 text-center text-slate-300">
@@ -279,7 +255,7 @@ function FinishedGamesScreen({
                             <span className="rounded-full bg-slate-900/60 px-2.5 py-0.5">Moves: {game.moveCount}</span>
                             <span className="rounded-full bg-slate-900/60 px-2.5 py-0.5">
                               {game.players.flatMap((player, index) => [
-                                index > 0 && (<span class="mx-1.5">vs</span>),
+                                index > 0 && (<span className="mx-1.5" key={`vs-${index}`}>vs</span>),
                                 <span
                                   key={player.playerId}
                                   className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/60"

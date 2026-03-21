@@ -46,12 +46,9 @@ function FinishedGamesRoute() {
       currentProfileId={accountQuery.data?.user?.id ?? null}
       requiresSignIn={isOwnArchive && !accountQuery.data?.user}
       showSignInHint={!isOwnArchive && !accountQuery.isLoading && !accountQuery.data?.user}
-      onBack={() => void navigate('/')}
       onOpenGame={(gameId) => void navigate(
         buildFinishedGamePath(
           gameId,
-          archiveRouteState.archivePage,
-          archiveRouteState.archiveBaseTimestamp,
           archiveRouteState.archiveView
         )
       )}

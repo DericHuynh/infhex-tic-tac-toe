@@ -15,88 +15,80 @@ function WaitingScreen({ sessionId, playerCount, playerNames, lobbyOptions, onIn
   const currentPlayerName = Object.values(playerNames)[0] ?? 'Player 1'
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-between px-4 py-6 sm:px-6 sm:py-10">
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8">
-          <section className="relative hidden min-h-[34rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:flex md:p-10">
-            <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-amber-300/20 blur-3xl" />
-            <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-sky-400/20 blur-3xl" />
-
-            <div className="relative flex flex-1 flex-col justify-center">
-              <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-1 text-xs uppercase tracking-[0.35em] text-amber-100">
-                Matchmaking
-              </div>
-              <h1 className="mt-6 text-4xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
-                Infinity
-                <br />
-                Hexagonal
-                <br />
-                Tic-Tac-Toe
-              </h1>
-              <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">
-                Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align six in a row.
-              </p>
+    <div className="max-w-[92rem] mx-auto flex flex-1 flex-col px-4 py-4 text-white sm:px-6 sm:py-6">
+      <div className="mx-auto flex gap-4 flex-col lg:flex-row lg:gap-8 lg:min-h-0 h-full flex-1 mt-4 lg:mt-[8vh]">
+        <section className="hidden w-full xl:flex relative rounded-[1.75rem] border-white/10 bg-white/6 p-6 sm:min-h-[34rem] sm:rounded-[2rem] sm:p-8 md:p-10 sm:h-[34rem]">
+          <div className="relative flex flex-1 flex-col justify-center">
+            <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-amber-100 sm:px-4 sm:text-xs sm:tracking-[0.35em]">
+              Two Players
             </div>
-          </section>
+            <h1 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl lg:text-6xl">
+              Infinity
+              <br />
+              Hexagonal
+              <br />
+              Tic-Tac-Toe
+            </h1>
+            <p className="mt-5 max-w-xl text-sm leading-6 text-slate-200 sm:mt-6 sm:text-base sm:leading-7 lg:text-lg">
+              Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align six in a row.
+            </p>
+          </div>
+        </section>
 
-          <section className="relative flex min-h-[34rem] overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:rounded-[2rem] sm:p-8 md:p-10">
-            <div className="absolute -left-6 top-8 hidden h-24 w-24 rounded-full bg-sky-400/25 blur-2xl sm:block" />
-            <div className="absolute -right-6 bottom-8 hidden h-28 w-28 rounded-full bg-amber-300/20 blur-2xl sm:block" />
+        <section className="w-full relative flex h-[43rem] overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:rounded-[2rem] sm:p-8 md:p-10">
+          <div className="relative flex flex-1 flex-col justify-center">
+            <div className={`mx-auto inline-flex items-center rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] ${lobbyOptions.visibility === 'private'
+              ? 'border-amber-300/40 bg-amber-300/10 text-amber-100'
+              : 'border-sky-300/35 bg-sky-300/10 text-sky-100'
+              }`}>
+              {lobbyOptions.visibility === 'private' ? 'Private Lobby' : 'Public Lobby'}
+            </div>
+            <h2 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl">
+              Waiting For
+              <br />
+              Another Player
+            </h2>
+            <p className="mt-4 text-sm leading-6 text-slate-200 sm:text-base sm:leading-7">
+              {lobbyOptions.visibility === 'private'
+                ? 'Keep this session open and share the invite link with the player you want to join. The match will launch automatically once they arrive.'
+                : 'Keep this session open. As soon as the second player joins, the match will launch automatically.'}
+            </p>
 
-            <div className="relative flex flex-1 flex-col justify-center">
-              <div className={`mx-auto inline-flex items-center rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] ${lobbyOptions.visibility === 'private'
-                ? 'border-amber-300/40 bg-amber-300/10 text-amber-100'
-                : 'border-sky-300/35 bg-sky-300/10 text-sky-100'
-                }`}>
-                {lobbyOptions.visibility === 'private' ? 'Private Lobby' : 'Public Lobby'}
+            <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-2">
+              <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:rounded-3xl sm:p-5">
+                <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Session ID</div>
+                <div className="mt-2 break-all text-2xl font-bold text-amber-200 sm:text-3xl">{sessionId}</div>
               </div>
-              <h2 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl">
-                Waiting For
-                <br />
-                Another Player
-              </h2>
-              <p className="mt-4 text-sm leading-6 text-slate-200 sm:text-base sm:leading-7">
-                {lobbyOptions.visibility === 'private'
-                  ? 'Keep this session open and share the invite link with the player you want to join. The match will launch automatically once they arrive.'
-                  : 'Keep this session open. As soon as the second player joins, the match will launch automatically.'}
-              </p>
-
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-2">
-                <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:rounded-3xl sm:p-5">
-                  <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Session ID</div>
-                  <div className="mt-2 break-all text-2xl font-bold text-amber-200 sm:text-3xl">{sessionId}</div>
-                </div>
-                <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:rounded-3xl sm:p-5">
-                  <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Time Control</div>
-                  <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{formatTimeControl(lobbyOptions.timeControl)}</div>
-                </div>
-                <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:col-span-2 sm:rounded-3xl sm:p-5">
-                  <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Hosting As</div>
-                  <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{currentPlayerName}</div>
-                  <div className="mt-1 text-sm text-slate-400">Players ready: {playerCount}/2</div>
-                </div>
+              <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:rounded-3xl sm:p-5">
+                <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Time Control</div>
+                <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{formatTimeControl(lobbyOptions.timeControl)}</div>
               </div>
-
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:flex sm:flex-wrap sm:justify-center">
-                <button
-                  onClick={onInviteFriend}
-                  className="rounded-full bg-sky-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-sky-300"
-                >
-                  Invite Friend
-                </button>
-                <button
-                  onClick={onCancel}
-                  className="rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-rose-400"
-                >
-                  Cancel Lobby
-                </button>
+              <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 sm:col-span-2 sm:rounded-3xl sm:p-5">
+                <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Hosting As</div>
+                <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{currentPlayerName}</div>
+                <div className="mt-1 text-sm text-slate-400">Players ready: {playerCount}/2</div>
               </div>
             </div>
-          </section>
-        </div>
 
-        <ScreenFooter />
+            <div className="mt-6 grid gap-3 sm:mt-8 sm:flex sm:flex-wrap sm:justify-center">
+              <button
+                onClick={onInviteFriend}
+                className="rounded-full bg-sky-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-sky-300"
+              >
+                Invite Friend
+              </button>
+              <button
+                onClick={onCancel}
+                className="rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-rose-400"
+              >
+                Cancel Lobby
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
+
+      <ScreenFooter />
     </div>
   )
 }

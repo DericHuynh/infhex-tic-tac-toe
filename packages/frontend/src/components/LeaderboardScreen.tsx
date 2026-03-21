@@ -7,7 +7,6 @@ interface LeaderboardScreenProps {
   isLoading: boolean
   errorMessage: string | null
   currentUsername: string | null
-  onBack: () => void
 }
 
 function LeaderboardScreen({
@@ -15,7 +14,6 @@ function LeaderboardScreen({
   isLoading,
   errorMessage,
   currentUsername,
-  onBack,
 }: Readonly<LeaderboardScreenProps>) {
   let inner;
   if (leaderboard) {
@@ -46,8 +44,6 @@ function LeaderboardScreen({
       category={"Player Leaderboard"}
       title={"Most victorious players"}
       description={"Current standings across all finished games, recalculated from match history every 10 minutes."}
-
-      onBack={onBack}
     >
       {errorMessage && (
         <div className="mt-6 rounded-[1.5rem] border border-rose-300/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">

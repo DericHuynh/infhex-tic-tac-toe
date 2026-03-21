@@ -94,8 +94,8 @@ function AdminControlsScreen({
   onOpenStats
 }: AdminControlsScreenProps) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_28%),radial-gradient(circle_at_right,_rgba(251,191,36,0.14),_transparent_24%),linear-gradient(145deg,_#0f172a,_#111827_42%,_#1f2937)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 sm:py-10">
+    <div className="flex flex-1 flex-col px-4 py-4 text-white sm:px-6 sm:py-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
         <section className="rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
