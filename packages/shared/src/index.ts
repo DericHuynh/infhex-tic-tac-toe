@@ -430,7 +430,6 @@ export const zAdminStatsResponse = z.object({
         private: z.number().int().nonnegative()
     }),
     connectedClients: z.number().int().nonnegative(),
-    leaderboard: zAdminLeaderboard,
     intervals: z.object({
         sinceMidnight: zAdminStatsWindow,
         last24Hours: zAdminStatsWindow,

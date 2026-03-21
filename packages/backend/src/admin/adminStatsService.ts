@@ -34,7 +34,6 @@ export class AdminStatsService {
     async getStats(now = new Date(), timezoneOffsetMinutes = now.getTimezoneOffset()): Promise<AdminStatsResponse> {
         const generatedAt = now.getTime();
         const intervals = this.createIntervals(generatedAt, timezoneOffsetMinutes);
-        const leaderboard = await this.getLeaderboardSnapshot(generatedAt);
 
         const [sinceMidnight, last24Hours, last7Days] = await Promise.all([
             this.getIntervalStats(intervals.sinceMidnight),
@@ -46,7 +45,6 @@ export class AdminStatsService {
             generatedAt,
             activeGames: this.sessionManager.getActiveSessionCounts(),
             connectedClients: this.socketServerGateway.getConnectedClientCount(),
-            leaderboard,
             intervals: {
                 sinceMidnight,
                 last24Hours,
