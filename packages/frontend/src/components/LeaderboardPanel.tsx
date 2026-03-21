@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AdminLeaderboard, AdminLeaderboardPlayer } from '@ih3t/shared'
+import type { Leaderboard, LeaderboardPlacement, LeaderboardPlayer } from '@ih3t/shared'
+import { useQueryAccount } from '../queryHooks'
 
 const winRatioFormatter = new Intl.NumberFormat(undefined, {
   style: 'percent',
@@ -35,7 +36,7 @@ function formatCountdown(remainingMs: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function LeaderboardAvatar({ player }: Readonly<{ player: AdminLeaderboardPlayer }>) {
+function LeaderboardAvatar({ player }: Readonly<{ player: LeaderboardPlayer }>) {
   if (player.image) {
     return (
       <img
@@ -86,20 +87,86 @@ function getRankTone(rank: number) {
   return 'border-white/10 bg-white/8 text-slate-200'
 }
 
-function getRowTone(rank: number) {
-  if (rank === 1) {
-    return 'border-amber-300/35 bg-[linear-gradient(90deg,rgba(251,191,36,0.16),rgba(15,23,42,0.5)_42%)]'
+function PersonalLeaderboardCard({
+  placement
+}: Readonly<{
+  placement: LeaderboardPlacement | null
+}>) {
+  const queryAccount = useQueryAccount();
+  if (!queryAccount.data?.user) {
+    /* user is not logged in */
+    return;
   }
 
-  if (rank === 2) {
-    return 'border-slate-200/22 bg-[linear-gradient(90deg,rgba(226,232,240,0.12),rgba(15,23,42,0.5)_42%)]'
+  if (!placement) {
+    return (
+      <div className="mt-5 rounded-[1.35rem] border border-sky-300/20 bg-sky-400/10 px-4 py-4 text-sm shadow-[0_16px_60px_rgba(14,165,233,0.12)]">
+        <div className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-sky-200">Your Place</div>
+        <div className="mt-2 text-base font-bold text-white">{queryAccount.data.user.username}</div>
+        <div className="mt-1 text-slate-300">
+          You are not ranked yet. Finish a signed-in game to claim a leaderboard spot.
+        </div>
+      </div>
+    )
   }
 
-  if (rank === 3) {
-    return 'border-orange-300/30 bg-[linear-gradient(90deg,rgba(251,146,60,0.14),rgba(15,23,42,0.5)_42%)]'
-  }
+  return (
+    <div className={"mt-5"}>
+      <LeaderboardCard display={"self"} rank={placement?.rank} player={placement} />
+    </div>
+  )
+}
 
-  return 'border-white/10 bg-slate-950/36'
+function LeaderboardCard({
+  display,
+  rank,
+  player
+}: Readonly<{
+  display: "self" | "normal",
+  rank: number,
+  player: LeaderboardPlayer,
+}>) {
+
+  const kRankTones: Record<string, string> & { "normal": string, "self": string } = {
+    "rank-1": 'border-amber-300/35 bg-[linear-gradient(90deg,rgba(251,191,36,0.16),rgba(15,23,42,0.5)_42%)]',
+    "rank-2": 'border-slate-200/22 bg-[linear-gradient(90deg,rgba(226,232,240,0.12),rgba(15,23,42,0.5)_42%)]',
+    "rank-3": 'border-orange-300/30 bg-[linear-gradient(90deg,rgba(251,146,60,0.14),rgba(15,23,42,0.5)_42%)]',
+
+    "self": 'border-sky-300/25 bg-[linear-gradient(120deg,rgba(14,165,233,0.18),rgba(15,23,42,0.82)_55%)]',
+    "normal": 'border-white/10 bg-slate-950/36'
+  };
+
+  return (
+    <div
+      key={`${player.profileId}:${rank}`}
+      className={`rounded-[1rem] border px-3 py-2.5 sm:rounded-[1.15rem] sm:px-3.5 sm:py-3 ${kRankTones[`rank-${rank}`] ?? kRankTones[display]}`}
+    >
+      {display === "self" && (
+        <div className="text-[0.68rem] mb-3 font-semibold uppercase tracking-[0.24em] text-sky-200">Your Place</div>
+      )}
+      <div className="grid grid-cols-[min-content_1fr] sm:grid-cols-[min-content_min-content_1fr] gap-x-3 gap-y-2 sm:gap-3.5">
+        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border text-xs font-black sm:h-10 sm:w-10 sm:text-sm ${getRankTone(rank)}`}>
+          {rank}
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <LeaderboardAvatar player={player} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-bold text-white sm:text-base">{player.displayName}</div>
+            {/* <div className="truncate text-[0.68rem] uppercase tracking-[0.16em] text-slate-500 sm:hidden">
+                        {player.profileId}
+                      </div> */}
+          </div>
+        </div>
+
+        <div className="col-start-2 sm:col-span-1 items-center flex w-full justify-center gap-x-4 gap-y-1.5 pt-0.5 text-left sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-x-5 sm:pt-0">
+          <LeaderboardMetric label="Played" minWidth={"4em"} value={player.gamesPlayed} />
+          <LeaderboardMetric label="Won" minWidth={"4em"} value={player.gamesWon} />
+          <LeaderboardMetric label="Ratio" minWidth={"5em"} value={formatWinRatio(player.winRatio)} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function LeaderboardSection({
@@ -110,13 +177,16 @@ export function LeaderboardSection({
   description = 'Ranked by total wins across finished game history. Ties fall back to win ratio, then games played.',
   showSnapshot = true
 }: Readonly<{
-  leaderboard: AdminLeaderboard,
+  leaderboard: Leaderboard,
   isLoading: boolean,
+  currentUsername?: string | null
   title?: string
   eyebrow?: string
   description?: string
   showSnapshot?: boolean
 }>) {
+  const isOnLeaderboard = leaderboard.ownPlacement && leaderboard.players.some(player => player.profileId === leaderboard.ownPlacement.profileId);
+
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.35)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -143,38 +213,33 @@ export function LeaderboardSection({
       ) : (
         <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-2.5">
           {leaderboard.players.map((player, index) => {
-            const rank = index + 1
+            if (leaderboard.ownPlacement?.profileId === player.profileId) {
+              return (
+                <LeaderboardCard
+                  key={`self`}
+                  display={"self"}
+                  rank={leaderboard.ownPlacement.rank}
+                  player={leaderboard.ownPlacement}
+                />
+              )
+            } else {
+              return (
+                <LeaderboardCard
+                  key={`${player.profileId}-${index}`}
+                  display={"normal"}
+                  rank={index + 1}
+                  player={player}
+                />
+              )
+            }
 
-            return (
-              <div
-                key={`${player.profileId}:${rank}`}
-                className={`rounded-[1rem] border px-3 py-2.5 sm:rounded-[1.15rem] sm:px-3.5 sm:py-3 ${getRowTone(rank)}`}
-              >
-                <div className="grid grid-cols-[min-content_1fr] sm:grid-cols-[min-content_min-content_1fr] gap-x-3 gap-y-2 sm:gap-3.5">
-                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border text-xs font-black sm:h-10 sm:w-10 sm:text-sm ${getRankTone(rank)}`}>
-                    {rank}
-                  </div>
 
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <LeaderboardAvatar player={player} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-bold text-white sm:text-base">{player.displayName}</div>
-                      {/* <div className="truncate text-[0.68rem] uppercase tracking-[0.16em] text-slate-500 sm:hidden">
-                        {player.profileId}
-                      </div> */}
-                    </div>
-                  </div>
-
-                  <div className="col-start-2 sm:col-span-1 items-center flex w-full justify-center gap-x-4 gap-y-1.5 pt-0.5 text-left sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-x-5 sm:pt-0">
-                    <LeaderboardMetric label="Played" minWidth={"4em"} value={player.gamesPlayed} />
-                    <LeaderboardMetric label="Won" minWidth={"4em"} value={player.gamesWon} />
-                    <LeaderboardMetric label="Ratio" minWidth={"5em"} value={formatWinRatio(player.winRatio)} />
-                  </div>
-                </div>
-              </div>
-            )
           })}
         </div>
+      )}
+
+      {!isOnLeaderboard && (
+        <PersonalLeaderboardCard placement={leaderboard.ownPlacement} />
       )}
 
       <LeaderboardRefreshIndicator leaderboard={leaderboard} isRefreshing={isLoading} />
@@ -186,7 +251,7 @@ export function LeaderboardRefreshIndicator({
   leaderboard,
   isRefreshing
 }: Readonly<{
-  leaderboard: AdminLeaderboard
+  leaderboard: Leaderboard
   isRefreshing: boolean
 }>) {
   const [now, setNow] = useState(() => Date.now())

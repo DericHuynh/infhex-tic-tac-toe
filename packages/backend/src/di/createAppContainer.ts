@@ -3,6 +3,7 @@ import { AdminStatsService } from '../admin/adminStatsService';
 import { AuthRepository } from '../auth/authRepository';
 import { AuthService } from '../auth/authService';
 import { ServerConfig } from '../config/serverConfig';
+import { LeaderboardService } from '../leaderboard/leaderboardService';
 import { createRootLogger, ROOT_LOGGER } from '../logger';
 import { MetricsTracker } from '../metrics/metricsTracker';
 import { CorsConfiguration } from '../network/cors';
@@ -30,6 +31,7 @@ export function createAppContainer(): DependencyContainer {
     appContainer.registerSingleton(AuthRepository);
     appContainer.registerSingleton(AuthService);
     appContainer.registerSingleton(AdminStatsService);
+    appContainer.registerSingleton(LeaderboardService);
     appContainer.registerSingleton(GameHistoryRepository);
     appContainer.registerSingleton(MetricsRepository);
     appContainer.registerSingleton(MetricsTracker);

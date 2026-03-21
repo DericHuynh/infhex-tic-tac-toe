@@ -1,11 +1,12 @@
-import type { AdminLeaderboard } from '@ih3t/shared'
+import type { Leaderboard } from '@ih3t/shared'
 import { LeaderboardSection } from './LeaderboardPanel'
 import PageCorpus from './PageCorpus'
 
 interface LeaderboardScreenProps {
-  leaderboard: AdminLeaderboard | null
+  leaderboard: Leaderboard | null
   isLoading: boolean
   errorMessage: string | null
+  currentUsername: string | null
   onBack: () => void
 }
 
@@ -13,6 +14,7 @@ function LeaderboardScreen({
   leaderboard,
   isLoading,
   errorMessage,
+  currentUsername,
   onBack,
 }: Readonly<LeaderboardScreenProps>) {
   let inner;
@@ -22,6 +24,7 @@ function LeaderboardScreen({
         <LeaderboardSection
           leaderboard={leaderboard}
           isLoading={isLoading}
+          currentUsername={currentUsername}
 
           title="Top 10 Players"
           eyebrow="Wins Leaderboard"

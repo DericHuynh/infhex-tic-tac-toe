@@ -1,4 +1,4 @@
-import type { AccountResponse, AdminLeaderboard, AdminStatsResponse, FinishedGameRecord, FinishedGamesPage, LobbyInfo } from '@ih3t/shared'
+import type { AccountResponse, Leaderboard, AdminStatsResponse, FinishedGameRecord, FinishedGamesPage, LobbyInfo } from '@ih3t/shared'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { fetchJson } from './apiClient'
 
@@ -43,7 +43,7 @@ async function fetchAdminStats(timezoneOffsetMinutes: number) {
 }
 
 async function fetchLeaderboard() {
-  return await fetchJson<AdminLeaderboard>('/api/leaderboard')
+  return await fetchJson<Leaderboard>('/api/leaderboard')
 }
 
 async function fetchFinishedGames(

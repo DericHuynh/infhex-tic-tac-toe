@@ -435,7 +435,7 @@ export const zAdminStatsWindow = z.object({
 });
 export type AdminStatsWindow = z.infer<typeof zAdminStatsWindow>;
 
-export const zAdminLeaderboardPlayer = z.object({
+export const zLeaderboardPlayer = z.object({
     profileId: zIdentifier,
     displayName: z.string(),
     image: z.string().nullable(),
@@ -443,15 +443,22 @@ export const zAdminLeaderboardPlayer = z.object({
     gamesWon: z.number().int().nonnegative(),
     winRatio: z.number().min(0).max(1)
 });
-export type AdminLeaderboardPlayer = z.infer<typeof zAdminLeaderboardPlayer>;
+export type LeaderboardPlayer = z.infer<typeof zLeaderboardPlayer>;
 
-export const zAdminLeaderboard = z.object({
+export const zLeaderboardPlacement = zLeaderboardPlayer.extend({
+    rank: z.number().int().positive()
+});
+export type LeaderboardPlacement = z.infer<typeof zLeaderboardPlacement>;
+
+export const zLeaderboard = z.object({
     generatedAt: zTimestamp,
     nextRefreshAt: zTimestamp,
     refreshIntervalMs: z.number().int().positive(),
-    players: z.array(zAdminLeaderboardPlayer)
+
+    players: z.array(zLeaderboardPlayer),
+    ownPlacement: zLeaderboardPlacement.nullable()
 });
-export type AdminLeaderboard = z.infer<typeof zAdminLeaderboard>;
+export type Leaderboard = z.infer<typeof zLeaderboard>;
 
 export const zAdminStatsResponse = z.object({
     generatedAt: zTimestamp,

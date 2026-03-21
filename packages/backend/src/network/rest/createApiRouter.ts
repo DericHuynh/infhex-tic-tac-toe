@@ -3,9 +3,9 @@ import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
 import {
     type AccountProfile,
-    type AdminStatsResponse,
     type AccountResponse,
-    type AdminLeaderboard,
+    type Leaderboard,
+    type AdminStatsResponse,
     type AdminBroadcastMessageResponse,
     type AdminShutdownControlResponse,
     DEFAULT_LOBBY_OPTIONS,
@@ -19,6 +19,7 @@ import {
 import { AdminStatsService } from '../../admin/adminStatsService';
 import { AuthRepository } from '../../auth/authRepository';
 import { AuthService } from '../../auth/authService';
+import { LeaderboardService } from '../../leaderboard/leaderboardService';
 import { getRequestClientInfo } from '../clientInfo';
 import { SocketServerGateway } from '../createSocketServer';
 import { GameHistoryRepository } from '../../persistence/gameHistoryRepository';
@@ -68,6 +69,7 @@ export class ApiRouter {
         @inject(AuthService) private readonly authService: AuthService,
         @inject(AuthRepository) private readonly authRepository: AuthRepository,
         @inject(AdminStatsService) private readonly adminStatsService: AdminStatsService,
+        @inject(LeaderboardService) private readonly leaderboardService: LeaderboardService,
         @inject(SocketServerGateway) private readonly socketServerGateway: SocketServerGateway,
         @inject(SessionManager) private readonly sessionManager: SessionManager,
         @inject(GameHistoryRepository) private readonly gameHistoryRepository: GameHistoryRepository
@@ -144,8 +146,9 @@ export class ApiRouter {
             res.json(game);
         });
 
-        router.get('/leaderboard', async (_req, res) => {
-            const response: AdminLeaderboard = await this.adminStatsService.getLeaderboardSnapshot();
+        router.get('/leaderboard', async (req, res) => {
+            const currentUser = await this.authService.getCurrentUser(req);
+            const response: Leaderboard = await this.leaderboardService.getLeaderboardSnapshot(currentUser?.id ?? null);
             res.json(response);
         });
 

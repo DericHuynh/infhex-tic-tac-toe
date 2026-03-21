@@ -324,88 +324,43 @@ export class GameHistoryRepository {
         };
     }
 
-    async getTopPlayerStats(limit = 10): Promise<PlayerLeaderboardStats[]> {
+    async getLeaderboardProfileIds(): Promise<string[]> {
         const collection = await this.getCollection();
-        const normalizedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
-        const pipeline = [
-            {
-                $match: {
-                    finishedAt: {
-                        $ne: null
-                    }
-                }
-            },
-            {
-                $unwind: '$players'
-            },
-            {
-                $match: {
-                    'players.profileId': {
-                        $ne: null
-                    }
-                }
-            },
-            {
-                $sort: {
-                    finishedAt: -1,
-                    id: -1
-                }
-            },
-            {
-                $group: {
-                    _id: '$players.profileId',
-                    profileId: { $first: '$players.profileId' },
-                    displayName: { $first: '$players.displayName' },
-                    gamesPlayed: { $sum: 1 },
-                    gamesWon: {
-                        $sum: {
-                            $cond: [
-                                { $eq: ['$players.playerId', '$gameResult.winningPlayerId'] },
-                                1,
-                                0
-                            ]
-                        }
-                    }
-                }
-            },
+        const players = await collection.aggregate<{ profileId: string }>([
+            ...this.createPlayerLeaderboardStatsPipeline(),
+            this.createPlayerLeaderboardSortStage(),
             {
                 $project: {
                     _id: 0,
-                    profileId: 1,
-                    displayName: 1,
-                    gamesPlayed: 1,
-                    gamesWon: 1,
-                    winRatio: {
-                        $cond: [
-                            { $eq: ['$gamesPlayed', 0] },
-                            0,
-                            { $divide: ['$gamesWon', '$gamesPlayed'] }
-                        ]
-                    }
-                }
-            },
-            {
-                $sort: {
-                    gamesWon: -1,
-                    winRatio: -1,
-                    gamesPlayed: -1,
-                    displayName: 1,
                     profileId: 1
                 }
             },
-            {
-                $limit: normalizedLimit
-            }
-        ];
-        const leaderboard = await collection.aggregate<PlayerLeaderboardStats>(pipeline).toArray();
+        ]).toArray();
 
-        return leaderboard.map((player) => ({
-            profileId: player.profileId,
-            displayName: player.displayName,
-            gamesPlayed: player.gamesPlayed,
-            gamesWon: player.gamesWon,
-            winRatio: Number(player.winRatio.toFixed(4))
-        }));
+        return players.map((player) => player.profileId);
+    }
+
+    async getLeaderboardStatsForPlayers(profileIds: string[]): Promise<Map<string, PlayerLeaderboardStats>> {
+        const uniqueProfileIds = Array.from(new Set(profileIds.filter((profileId) => profileId.trim().length > 0)));
+        if (uniqueProfileIds.length === 0) {
+            return new Map();
+        }
+
+        const collection = await this.getCollection();
+        const players = await collection.aggregate<PlayerLeaderboardStats>([
+            ...this.createPlayerLeaderboardStatsPipeline(),
+            {
+                $match: {
+                    profileId: {
+                        $in: uniqueProfileIds
+                    }
+                }
+            }
+        ]).toArray();
+
+        return new Map(
+            players.map((player) => [player.profileId, this.normalizePlayerLeaderboardStats(player)] as const)
+        );
     }
 
     private async getCollection(): Promise<Collection<GameHistoryDocument>> {
@@ -685,6 +640,89 @@ export class GameHistoryRepository {
         }
 
         return Math.max(0, Math.floor(baseTimestamp));
+    }
+
+    private createPlayerLeaderboardStatsPipeline(): Document[] {
+        return [
+            {
+                $match: {
+                    finishedAt: {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $unwind: '$players'
+            },
+            {
+                $match: {
+                    'players.profileId': {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $sort: {
+                    finishedAt: -1,
+                    id: -1
+                }
+            },
+            {
+                $group: {
+                    _id: '$players.profileId',
+                    profileId: { $first: '$players.profileId' },
+                    displayName: { $first: '$players.displayName' },
+                    gamesPlayed: { $sum: 1 },
+                    gamesWon: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$players.playerId', '$gameResult.winningPlayerId'] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    profileId: 1,
+                    displayName: 1,
+                    gamesPlayed: 1,
+                    gamesWon: 1,
+                    winRatio: {
+                        $cond: [
+                            { $eq: ['$gamesPlayed', 0] },
+                            0,
+                            { $divide: ['$gamesWon', '$gamesPlayed'] }
+                        ]
+                    }
+                }
+            }
+        ];
+    }
+
+    private createPlayerLeaderboardSortStage(): Document {
+        return {
+            $sort: {
+                gamesWon: -1,
+                winRatio: -1,
+                gamesPlayed: -1,
+                displayName: 1,
+                profileId: 1
+            }
+        };
+    }
+
+    private normalizePlayerLeaderboardStats(player: PlayerLeaderboardStats): PlayerLeaderboardStats {
+        return {
+            profileId: player.profileId,
+            displayName: player.displayName,
+            gamesPlayed: player.gamesPlayed,
+            gamesWon: player.gamesWon,
+            winRatio: Number(player.winRatio.toFixed(4))
+        };
     }
 
     private logMissingHistory(event: string, gameId: string, extraDetails: Record<string, unknown> = {}): void {
