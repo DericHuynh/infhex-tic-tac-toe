@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 export const DUMMY = 'Hello?';
+export const PLACE_CELL_HEX_RADIUS = 8;
+
+export interface HexCoordinate {
+    x: number;
+    y: number;
+}
 
 const zTimestamp = z.number().int();
 const zCoordinate = z.number().int();
@@ -108,6 +114,26 @@ export const zBoardCell = z.object({
     occupiedBy: zCellOccupant
 });
 export type BoardCell = z.infer<typeof zBoardCell>;
+
+export function getCellKey(x: number, y: number): string {
+    return `${x},${y}`;
+}
+
+export function getHexDistance(a: HexCoordinate, b: HexCoordinate): number {
+    return (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs((a.x + a.y) - (b.x + b.y))) / 2;
+}
+
+export function isCellWithinPlacementRadius(
+    placedCells: readonly HexCoordinate[],
+    candidate: HexCoordinate,
+    radius = PLACE_CELL_HEX_RADIUS
+): boolean {
+    if (placedCells.length === 0) {
+        return true;
+    }
+
+    return placedCells.some((cell) => getHexDistance(cell, candidate) <= radius);
+}
 
 export const zGameBoard = z.object({
     cells: z.array(zBoardCell),

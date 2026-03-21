@@ -1,5 +1,13 @@
 import { injectable } from 'tsyringe';
-import { zCellOccupant, type BoardCell, type GameMove, type GameTimeControl } from '@ih3t/shared';
+import {
+    getCellKey,
+    isCellWithinPlacementRadius,
+    PLACE_CELL_HEX_RADIUS,
+    zCellOccupant,
+    type BoardCell,
+    type GameMove,
+    type GameTimeControl
+} from '@ih3t/shared';
 import type { PublicGameStatePayload, ServerGameSession } from '../session/types';
 
 interface ApplyMoveParams {
@@ -61,10 +69,18 @@ export class GameSimulation {
             throw new SimulationError('No placements remaining this turn');
         }
 
-        const cellKey = this.getCellKey(x, y);
-        const isOccupied = session.boardState.cells.some((cell) => this.getCellKey(cell.x, cell.y) === cellKey);
+        const cellKey = getCellKey(x, y);
+        const isOccupied = session.boardState.cells.some((cell) => getCellKey(cell.x, cell.y) === cellKey);
         if (isOccupied) {
             throw new SimulationError('Cell is already occupied');
+        }
+
+        if (session.boardState.cells.length === 0 && (x !== 0 || y !== 0)) {
+            throw new SimulationError('First placement must be at the origin');
+        }
+
+        if (!isCellWithinPlacementRadius(session.boardState.cells, { x, y })) {
+            throw new SimulationError(`Cell must be within ${PLACE_CELL_HEX_RADIUS} hexes of an existing placed cell`);
         }
 
         this.applyMoveTimeControl(session, playerId, timestamp);
@@ -239,7 +255,7 @@ export class GameSimulation {
         const occupiedCells = new Set(
             session.boardState.cells
                 .filter((cell) => cell.occupiedBy === playerId)
-                .map((cell) => this.getCellKey(cell.x, cell.y))
+                .map((cell) => getCellKey(cell.x, cell.y))
         );
         const directions: Array<[number, number]> = [
             [1, 0],
@@ -268,16 +284,12 @@ export class GameSimulation {
         let currentX = startX + directionX;
         let currentY = startY + directionY;
 
-        while (occupiedCells.has(this.getCellKey(currentX, currentY))) {
+        while (occupiedCells.has(getCellKey(currentX, currentY))) {
             count += 1;
             currentX += directionX;
             currentY += directionY;
         }
 
         return count;
-    }
-
-    private getCellKey(x: number, y: number): string {
-        return `${x},${y}`;
     }
 }

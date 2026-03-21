@@ -1,7 +1,8 @@
-import type { DatabaseGamePlayer, PlayerNames } from '@ih3t/shared'
-import type { BoardCell } from '@ih3t/shared'
+import { PLACE_CELL_HEX_RADIUS, getCellKey, getHexDistance } from '@ih3t/shared'
+import type { BoardCell, DatabaseGamePlayer, PlayerNames } from '@ih3t/shared'
 
-export const HEX_RADIUS = 8
+export const HEX_RADIUS = PLACE_CELL_HEX_RADIUS
+export { getCellKey }
 export const MIN_SCALE = 12
 export const MAX_SCALE = 200
 export const DEFAULT_SCALE = 42
@@ -51,10 +52,6 @@ export function getPlayerColor(players: readonly PlayerReference[], playerId: st
   }
 
   return palette[Math.min(index, palette.length - 1)]
-}
-
-export function getCellKey(x: number, y: number): string {
-  return `${x},${y}`
 }
 
 export function getPlayerLabel(
@@ -201,7 +198,7 @@ export function buildRenderableCells(cells: BoardCell[]): RenderableCell[] {
 }
 
 function hexDistance(a: HexCell, b: HexCell): number {
-  return (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs((a.x + a.y) - (b.x + b.y))) / 2
+  return getHexDistance(a, b)
 }
 
 function roundAxial(x: number, y: number): HexCell {
