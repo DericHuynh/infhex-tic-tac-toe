@@ -93,7 +93,9 @@ export function useQueryAccount(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.account,
     queryFn: fetchAccount,
-    enabled: options?.enabled
+    enabled: options?.enabled,
+
+    staleTime: 10 * 60 * 1000
   })
 }
 
@@ -101,7 +103,9 @@ export function useQueryAccountStatistics(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.accountStatistics,
     queryFn: fetchAccountStatistics,
-    enabled: options?.enabled
+    enabled: options?.enabled,
+
+    staleTime: 60 * 1000
   })
 }
 
@@ -143,7 +147,8 @@ export function useQueryFinishedGames(
     queryKey: queryKeys.finishedGamesPage(view, page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp),
     queryFn: () => fetchFinishedGames(page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp, view),
     placeholderData: keepPreviousData,
-    enabled: options?.enabled
+    enabled: options?.enabled,
+    staleTime: 60 * 60 * 1000,
   })
 }
 
@@ -157,6 +162,7 @@ export function useQueryFinishedGame(gameId: string | null, options?: { enabled?
 
       return fetchFinishedGame(gameId)
     },
-    enabled: Boolean(gameId) && options?.enabled
+    enabled: Boolean(gameId) && options?.enabled,
+    staleTime: 60 * 60 * 1000,
   })
 }
