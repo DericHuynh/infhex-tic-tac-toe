@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'
 import './index.css'
 import { appRouter } from './App'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { queryClient } from './queryClient'
 import { installSoundEffects } from './soundEffects'
 
@@ -17,8 +18,10 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={appRouter} />
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={appRouter} />
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 )

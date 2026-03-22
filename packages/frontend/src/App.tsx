@@ -3,6 +3,7 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import CommonPageLayout from './components/CommonPageLayout'
 import LiveGameRuntime from './components/LiveGameRuntime'
+import RouteErrorScreen from './components/RouteErrorScreen'
 import FinishedGameRoute from './routes/FinishedGameRoute'
 import FinishedGamesRoute from './routes/FinishedGamesRoute'
 import AdminRoute from './routes/AdminRoute'
@@ -33,7 +34,7 @@ function AppShell() {
 export const appRouter = createBrowserRouter(
   createRoutesFromElements(
     <>
-      <Route element={<AppShell />}>
+      <Route element={<AppShell />} errorElement={<RouteErrorScreen />}>
         <Route element={<CommonPageLayout limitWidth={true} />}>
           <Route path="/" element={<LobbyRoute />} />
           <Route path="/games" element={<FinishedGamesRoute />} />

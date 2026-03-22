@@ -4,6 +4,7 @@ import { toast } from 'react-toastify'
 import { signInWithDiscord, signOutAccount } from '../authClient'
 import { useQueryAccount } from '../queryHooks'
 import AccountPicture from './AccountPicture'
+import AppErrorBoundary from './AppErrorBoundary'
 
 function showErrorToast(message: string) {
   toast.error(message, {
@@ -295,7 +296,9 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
       </header>
 
       <main className={`mx-auto flex w-full ${limitWidth ? "max-w-[92rem]" : ""} min-h-0 flex-1 flex-col`}>
-        <Outlet />
+        <AppErrorBoundary>
+          <Outlet />
+        </AppErrorBoundary>
       </main>
     </div>
   )
