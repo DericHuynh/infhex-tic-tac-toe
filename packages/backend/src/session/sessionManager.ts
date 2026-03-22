@@ -119,6 +119,24 @@ export class SessionManager {
         return session ? this.toSessionInfo(session) : null;
     }
 
+    async terminateActiveSession(sessionId: string): Promise<SessionInfo> {
+        const session = this.sessions.get(sessionId);
+        if (!session) {
+            throw new SessionError('Session not found.');
+        }
+
+        if (session.state === 'lobby') {
+            throw new SessionError('Only in-progress games can be terminated.');
+        }
+
+        if (session.state === 'finished') {
+            throw new SessionError('Session has already finished.');
+        }
+
+        await this.finishSession(session, 'terminated', null);
+        return this.toSessionInfo(session);
+    }
+
     getTerminalSessionStatuses(now = Date.now()): TerminalSessionStatus[] {
         return this.listStoredSessions().map((session) => ({
             sessionId: session.id,

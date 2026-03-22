@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { toast } from 'react-toastify'
-import { broadcastAdminMessage, cancelShutdownSchedule, scheduleShutdown } from '../adminClient'
+import { broadcastAdminMessage, cancelShutdownSchedule, scheduleShutdown, terminateAdminGame } from '../adminClient'
 import AdminControlsScreen from '../components/AdminControlsScreen'
+import { queryClient } from '../queryClient'
 import { useLiveGameStore } from '../liveGameStore'
-import { useQueryAccount } from '../queryHooks'
+import { queryKeys, useQueryAccount, useQueryAvailableSessions } from '../queryHooks'
 
 function showSuccessToast(message: string) {
   toast.success(message, {
@@ -23,11 +24,15 @@ function AdminControlsRoute() {
   const shutdown = useLiveGameStore(state => state.shutdown)
   const accountQuery = useQueryAccount({ enabled: true })
   const isAdmin = accountQuery.data?.user?.role === 'admin'
+  const availableSessionsQuery = useQueryAvailableSessions({ enabled: isAdmin })
   const [delayMinutes, setDelayMinutes] = useState('10')
   const [messageDraft, setMessageDraft] = useState('')
   const [isScheduling, setIsScheduling] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null)
+
+  const activeGames = (availableSessionsQuery.data ?? []).filter((session) => session.startedAt !== null)
 
   const handleSchedule = async () => {
     const parsedMinutes = Number(delayMinutes)
@@ -80,6 +85,28 @@ function AdminControlsRoute() {
     }
   }
 
+  const handleTerminateGame = async (sessionId: string) => {
+    const targetSession = activeGames.find((session) => session.id === sessionId)
+    const targetLabel = targetSession?.players.map((player) => player.displayName).join(' vs ') || sessionId
+    if (!window.confirm(`Terminate the live game "${targetLabel}" now?`)) {
+      return
+    }
+
+    setTerminatingSessionId(sessionId)
+    try {
+      await terminateAdminGame(sessionId)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.availableSessions }),
+        queryClient.invalidateQueries({ queryKey: ['admin'] })
+      ])
+      showSuccessToast('Game terminated.')
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to terminate game.')
+    } finally {
+      setTerminatingSessionId(null)
+    }
+  }
+
   if (accountQuery.isLoading) {
     return (
       <AdminControlsScreen
@@ -90,11 +117,15 @@ function AdminControlsRoute() {
         isScheduling={isScheduling}
         isCancelling={isCancelling}
         isSendingMessage={isSendingMessage}
+        activeGames={[]}
+        isLoadingActiveGames={false}
+        terminatingSessionId={terminatingSessionId}
         onDelayMinutesChange={setDelayMinutes}
         onMessageDraftChange={setMessageDraft}
         onSchedule={() => void handleSchedule()}
         onCancel={() => void handleCancel()}
         onSendMessage={() => void handleSendMessage()}
+        onTerminateGame={(sessionId) => void handleTerminateGame(sessionId)}
         onBack={() => void navigate('/')}
         onOpenStats={() => void navigate('/admin/stats')}
       />
@@ -114,11 +145,15 @@ function AdminControlsRoute() {
       isScheduling={isScheduling}
       isCancelling={isCancelling}
       isSendingMessage={isSendingMessage}
+      activeGames={activeGames}
+      isLoadingActiveGames={availableSessionsQuery.isLoading}
+      terminatingSessionId={terminatingSessionId}
       onDelayMinutesChange={setDelayMinutes}
       onMessageDraftChange={setMessageDraft}
       onSchedule={() => void handleSchedule()}
       onCancel={() => void handleCancel()}
       onSendMessage={() => void handleSendMessage()}
+      onTerminateGame={(sessionId) => void handleTerminateGame(sessionId)}
       onBack={() => void navigate('/')}
       onOpenStats={() => void navigate('/admin/stats')}
     />

@@ -5,6 +5,7 @@ import {
     type AccountResponse,
     type AccountStatisticsResponse,
     type Leaderboard,
+    type AdminTerminateSessionResponse,
     type AdminStatsResponse,
     type AdminBroadcastMessageResponse,
     type AdminShutdownControlResponse,
@@ -214,6 +215,32 @@ export class ApiRouter {
             const broadcast = this.socketServerGateway.broadcastAdminMessage(request.message);
             const response: AdminBroadcastMessageResponse = { broadcast };
             res.json(response);
+        });
+
+        router.post('/sessions/:sessionId/terminate', async (req, res) => {
+            const user = await this.requireAdminUser(req, res);
+            if (!user) {
+                return;
+            }
+
+            try {
+                const sessionId = String(req.params.sessionId ?? '').trim();
+                if (!sessionId) {
+                    res.status(400).json({ error: 'Session id is required.' });
+                    return;
+                }
+
+                const session = await this.sessionManager.terminateActiveSession(sessionId);
+                const response: AdminTerminateSessionResponse = { session };
+                res.json(response);
+            } catch (error: unknown) {
+                if (error instanceof SessionError) {
+                    res.status(409).json({ error: error.message });
+                    return;
+                }
+
+                throw error;
+            }
         });
 
         router.post('/sessions', express.json(), async (req, res) => {

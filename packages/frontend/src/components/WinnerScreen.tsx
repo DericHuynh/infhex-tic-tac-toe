@@ -28,8 +28,8 @@ function WinnerScreen({
       : session.finishReason === 'surrender'
         ? 'The other player surrendered.'
         : session.finishReason === 'terminated'
-        ? 'The match was closed because the server shutdown reached its deadline.'
-        : 'The other player disconnected.'
+          ? 'The match has been terminated.'
+          : 'The other player disconnected.'
 
   return (
     <FinishedPlayerScreen

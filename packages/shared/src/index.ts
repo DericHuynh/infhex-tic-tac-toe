@@ -246,6 +246,11 @@ export const zSessionInfo = z.discriminatedUnion('state', [
 ]);
 export type SessionInfo = z.infer<typeof zSessionInfo>;
 
+export const zAdminTerminateSessionResponse = z.object({
+    session: zSessionInfo
+});
+export type AdminTerminateSessionResponse = z.infer<typeof zAdminTerminateSessionResponse>;
+
 export const zGameMove = z.object({
     moveNumber: z.number().int().nonnegative(),
     playerId: zIdentifier,

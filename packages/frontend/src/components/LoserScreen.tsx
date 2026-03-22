@@ -28,8 +28,8 @@ function LoserScreen({
       : session.finishReason === 'surrender'
         ? 'You surrendered the match.'
         : session.finishReason === 'terminated'
-        ? 'The match was closed because the server shutdown reached its deadline.'
-        : 'You left the match before it finished.'
+          ? 'The match has been terminated.'
+          : 'You left the match before it finished.'
   return (
     <FinishedPlayerScreen
       session={session}

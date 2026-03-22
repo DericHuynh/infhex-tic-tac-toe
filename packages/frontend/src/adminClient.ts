@@ -1,6 +1,7 @@
 import type {
   AdminBroadcastMessageRequest,
   AdminBroadcastMessageResponse,
+  AdminTerminateSessionResponse,
   AdminShutdownControlResponse,
   AdminScheduleShutdownRequest
 } from '@ih3t/shared'
@@ -29,5 +30,11 @@ export async function broadcastAdminMessage(message: string) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ message } satisfies AdminBroadcastMessageRequest)
+  })
+}
+
+export async function terminateAdminGame(sessionId: string) {
+  return await fetchJson<AdminTerminateSessionResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/terminate`, {
+    method: 'POST'
   })
 }

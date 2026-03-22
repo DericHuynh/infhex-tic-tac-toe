@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { ShutdownState } from '@ih3t/shared'
+import type { LobbyInfo, ShutdownState } from '@ih3t/shared'
+import { formatTimeControl } from '../lobbyOptions'
 
 interface AdminControlsScreenProps {
   isAuthorizing: boolean
@@ -9,11 +10,15 @@ interface AdminControlsScreenProps {
   isScheduling: boolean
   isCancelling: boolean
   isSendingMessage: boolean
+  activeGames: LobbyInfo[]
+  isLoadingActiveGames: boolean
+  terminatingSessionId: string | null
   onDelayMinutesChange: (value: string) => void
   onMessageDraftChange: (value: string) => void
   onSchedule: () => void
   onCancel: () => void
   onSendMessage: () => void
+  onTerminateGame: (sessionId: string) => void
   onBack: () => void
   onOpenStats: () => void
 }
@@ -36,6 +41,25 @@ function formatRemainingTime(remainingMs: number) {
   }
 
   return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
+
+function formatLiveDuration(startedAt: number, now: number) {
+  const totalSeconds = Math.max(0, Math.round((now - startedAt) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function formatLobbyPlayers(players: LobbyInfo['players'], rated: boolean) {
+  if (players.length === 0) {
+    return 'Waiting for players'
+  }
+
+  return players
+    .map((player) => rated && player.elo !== null
+      ? `${player.displayName} (${player.elo})`
+      : player.displayName)
+    .join(' vs ')
 }
 
 function ShutdownSummary({ shutdown }: { shutdown: ShutdownState | null }) {
@@ -85,14 +109,32 @@ function AdminControlsScreen({
   isScheduling,
   isCancelling,
   isSendingMessage,
+  activeGames,
+  isLoadingActiveGames,
+  terminatingSessionId,
   onDelayMinutesChange,
   onMessageDraftChange,
   onSchedule,
   onCancel,
   onSendMessage,
+  onTerminateGame,
   onBack,
   onOpenStats
 }: AdminControlsScreenProps) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (activeGames.length === 0) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [activeGames.length])
+
   return (
     <div className="flex flex-1 flex-col px-4 py-4 text-white sm:px-6 sm:py-6">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
@@ -106,7 +148,7 @@ function AdminControlsScreen({
                 Admin Controls
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Schedule or cancel a graceful shutdown and broadcast a global toast message to every connected player.
+                Schedule a restart, send a global announcement, or terminate a live game that needs intervention.
               </p>
             </div>
 
@@ -201,6 +243,76 @@ function AdminControlsScreen({
                 >
                   {isSendingMessage ? 'Sending...' : 'Send Message'}
                 </button>
+              </div>
+            </section>
+
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.35)] xl:col-span-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] text-rose-200/80">Intervention</div>
+                  <h2 className="mt-3 text-2xl font-black uppercase tracking-[0.08em] text-white">Active Games</h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                    Manually end an in-progress match and send both players to the terminated result screen.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-right">
+                  <div className="text-2xl font-black text-white">{activeGames.length}</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">In Progress</div>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                {isLoadingActiveGames ? (
+                  <div className="rounded-[1.35rem] border border-dashed border-white/10 bg-slate-950/35 px-5 py-5 text-sm text-slate-400">
+                    Loading active games...
+                  </div>
+                ) : activeGames.length === 0 ? (
+                  <div className="rounded-[1.35rem] border border-dashed border-white/10 bg-slate-950/35 px-5 py-5 text-sm text-slate-400">
+                    No live games are running right now.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeGames.map((session) => (
+                      <div
+                        key={session.id}
+                        className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-4 lg:flex-row lg:items-center lg:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-rose-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-100">
+                              Active Game
+                            </span>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${session.rated
+                              ? 'bg-amber-300/15 text-amber-100'
+                              : 'bg-white/8 text-slate-200'
+                              }`}>
+                              {session.rated ? 'Rated' : 'Unrated'}
+                            </span>
+                            <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+                              {formatTimeControl(session.timeControl)}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 break-all text-lg font-bold text-white sm:text-xl">{session.id}</div>
+                          <div className="mt-1 text-sm text-slate-300">{formatLobbyPlayers(session.players, session.rated)}</div>
+                          {session.startedAt && (
+                            <div className="mt-1 text-sm text-slate-400">
+                              Running for {formatLiveDuration(session.startedAt, now)} • Started {formatDateTime(session.startedAt)}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => onTerminateGame(session.id)}
+                          disabled={terminatingSessionId !== null}
+                          className="rounded-full border border-rose-300/25 bg-rose-500/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50 lg:shrink-0"
+                        >
+                          {terminatingSessionId === session.id ? 'Terminating...' : 'Terminate Game'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
           </div>
