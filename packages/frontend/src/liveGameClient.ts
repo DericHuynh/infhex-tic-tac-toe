@@ -64,7 +64,6 @@ export function startLiveGameClient() {
   socket.on('connect_error', (error) => {
     const message = error.message || 'Failed to connect to the server.'
     useLiveGameStore.getState().setDisconnected()
-    queryClient.setQueryData(queryKeys.availableSessions, [])
 
     if (isVersionMismatchMessage(message)) {
       const activeSocket = socket
@@ -107,7 +106,6 @@ export function startLiveGameClient() {
     }
 
     useLiveGameStore.getState().setDisconnected()
-    queryClient.setQueryData(queryKeys.availableSessions, [])
     showErrorToast('Disconnected from the server.')
   })
 

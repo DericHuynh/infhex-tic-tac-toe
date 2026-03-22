@@ -70,7 +70,9 @@ export function useQueryAvailableSessions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.availableSessions,
     queryFn: fetchAvailableSessions,
-    enabled: options?.enabled
+    enabled: options?.enabled,
+
+    staleTime: 10_000
   })
 }
 
