@@ -2,7 +2,7 @@ import { ExpressAuth, getSession, type ExpressAuthConfig, type Session } from '@
 import _Discord, { type DiscordProfile } from '@auth/express/providers/discord';
 import type { Request } from 'express';
 import type { Socket } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents } from '@ih3t/shared';
+import { DEFAULT_ACCOUNT_PREFERENCES, type AccountPreferences, type ClientToServerEvents, type ServerToClientEvents } from '@ih3t/shared';
 import { inject, injectable } from 'tsyringe';
 import { ServerConfig } from '../config/serverConfig';
 import { getCookieValue } from '../network/clientInfo';
@@ -113,6 +113,15 @@ export class AuthService {
         }
 
         return this.authRepository.getUserProfileBySessionToken(sessionToken);
+    }
+
+    async getCurrentUserPreferences(request: Request): Promise<AccountPreferences> {
+        const currentUser = await this.getCurrentUser(request);
+        if (!currentUser) {
+            return DEFAULT_ACCOUNT_PREFERENCES;
+        }
+
+        return await this.authRepository.getAccountPreferences(currentUser.id) ?? DEFAULT_ACCOUNT_PREFERENCES;
     }
 
     async getCurrentUserFromSocket(

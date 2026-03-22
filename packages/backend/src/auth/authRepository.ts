@@ -4,7 +4,12 @@ import type {
     AdapterSession,
     AdapterUser,
 } from '@auth/express/adapters';
-import type { UserRole } from '@ih3t/shared';
+import {
+    DEFAULT_ACCOUNT_PREFERENCES,
+    type AccountPreferences,
+    type UserRole,
+    zAccountPreferences,
+} from '@ih3t/shared';
 import type { Logger } from 'pino';
 import { Collection, ObjectId, type Document } from 'mongodb';
 import { inject, injectable } from 'tsyringe';
@@ -18,6 +23,7 @@ interface AuthUserDocument extends Document {
     emailVerified?: Date | null;
     image?: string | null;
     role?: UserRole;
+    preferences?: AccountPreferences;
     registeredAt?: number;
     lastActiveAt?: number;
 }
@@ -94,6 +100,7 @@ export class AuthRepository implements Adapter {
         const document: AuthUserDocument = {
             _id: new ObjectId(),
             role: 'user',
+            preferences: DEFAULT_ACCOUNT_PREFERENCES,
             registeredAt: now,
             lastActiveAt: now,
             ...this.toUserDocument(user),
@@ -315,12 +322,55 @@ export class AuthRepository implements Adapter {
     }
 
     async updateUsername(userId: string, username: string): Promise<AccountUserProfile | null> {
-        const updatedUser = await this.updateUser({
-            id: userId,
-            name: username,
-        });
+        const collection = await this.getUsersCollection();
+        const objectId = this.parseObjectId(userId);
+        if (!objectId) {
+            return null;
+        }
 
-        return this.mapAccountUserProfile(updatedUser);
+        await collection.updateOne(
+            { _id: objectId },
+            {
+                $set: {
+                    name: username,
+                },
+            }
+        );
+
+        const document = await collection.findOne({ _id: objectId });
+        return document ? this.mapAccountUserProfile(this.mapUserDocument(document)) : null;
+    }
+
+    async getAccountPreferences(userId: string): Promise<AccountPreferences | null> {
+        const collection = await this.getUsersCollection();
+        const objectId = this.parseObjectId(userId);
+        if (!objectId) {
+            return null;
+        }
+
+        const document = await collection.findOne({ _id: objectId });
+        return document ? this.normalizeAccountPreferences(document.preferences) : null;
+    }
+
+    async updateAccountPreferences(userId: string, preferences: AccountPreferences): Promise<AccountPreferences | null> {
+        const collection = await this.getUsersCollection();
+        const objectId = this.parseObjectId(userId);
+        if (!objectId) {
+            return null;
+        }
+
+        const normalizedPreferences = this.normalizeAccountPreferences(preferences);
+        await collection.updateOne(
+            { _id: objectId },
+            {
+                $set: {
+                    preferences: normalizedPreferences,
+                },
+            }
+        );
+
+        const document = await collection.findOne({ _id: objectId });
+        return document ? this.normalizeAccountPreferences(document.preferences) : null;
     }
 
     async getUserProfilesByIds(userIds: string[]): Promise<Map<string, AccountUserProfile>> {
@@ -576,6 +626,11 @@ export class AuthRepository implements Adapter {
             registeredAt,
             lastActiveAt: this.normalizeTimestamp(user.lastActiveAt) ?? registeredAt,
         };
+    }
+
+    private normalizeAccountPreferences(value: unknown): AccountPreferences {
+        const result = zAccountPreferences.safeParse(value ?? {});
+        return result.success ? result.data : DEFAULT_ACCOUNT_PREFERENCES;
     }
 
     private toUserDocument(user: Partial<AdapterUser>): Omit<AuthUserDocument, '_id'> {

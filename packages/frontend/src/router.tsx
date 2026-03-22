@@ -3,6 +3,7 @@ import { ToastContainer } from 'react-toastify'
 import CommonPageLayout from './components/CommonPageLayout'
 import LiveGameRuntime from './components/LiveGameRuntime'
 import RouteErrorScreen from './components/RouteErrorScreen'
+import AccountPreferencesRoute from './routes/AccountPreferencesRoute'
 import AdminControlsRoute from './routes/AdminControlsRoute'
 import AdminRoute from './routes/AdminRoute'
 import FinishedGameRoute from './routes/FinishedGameRoute'
@@ -43,6 +44,7 @@ export function createAppRoutes() {
           <Route path="/games" element={<FinishedGamesRoute />} />
           <Route path="/games/:gameId" element={<FinishedGameRoute />} />
           <Route path="/account/profile" element={<ProfileRoute />} />
+          <Route path="/account/preferences" element={<AccountPreferencesRoute />} />
           <Route path="/account/games" element={<FinishedGamesRoute />} />
           <Route path="/account/games/:gameId" element={<FinishedGameRoute />} />
           <Route path="/leaderboard" element={<LeaderboardRoute />} />

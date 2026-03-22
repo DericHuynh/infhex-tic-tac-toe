@@ -1,4 +1,10 @@
-import type { AccountResponse, UpdateAccountProfileRequest } from '@ih3t/shared'
+import type {
+  AccountPreferences,
+  AccountPreferencesResponse,
+  AccountResponse,
+  UpdateAccountPreferencesRequest,
+  UpdateAccountProfileRequest
+} from '@ih3t/shared'
 import { fetchJson, getApiBaseUrl } from './apiClient'
 
 interface CsrfResponse {
@@ -57,12 +63,26 @@ export async function signOutAccount() {
   })
 }
 
-export async function updateAccountUsername(username: string) {
+export async function updateAccountProfile(update: UpdateAccountProfileRequest) {
   return await fetchJson<AccountResponse>('/api/account', {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ username } satisfies UpdateAccountProfileRequest)
+    body: JSON.stringify(update)
+  })
+}
+
+export async function updateAccountUsername(username: string) {
+  return await updateAccountProfile({ username } satisfies UpdateAccountProfileRequest)
+}
+
+export async function updateAccountPreferences(preferences: AccountPreferences) {
+  return await fetchJson<AccountPreferencesResponse>('/api/account/preferences', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ preferences } satisfies UpdateAccountPreferencesRequest)
   })
 }

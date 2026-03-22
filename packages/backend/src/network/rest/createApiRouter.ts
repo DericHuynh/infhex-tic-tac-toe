@@ -2,6 +2,7 @@ import express from 'express';
 import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
 import {
+    type AccountPreferencesResponse,
     type AccountResponse,
     type AccountStatisticsResponse,
     type Leaderboard,
@@ -15,6 +16,7 @@ import {
     zAdminBroadcastMessageRequest,
     zAdminScheduleShutdownRequest,
     zLobbyVisibility,
+    zUpdateAccountPreferencesRequest,
     zUpdateAccountProfileRequest,
 } from '@ih3t/shared';
 import { AdminStatsService } from '../../admin/adminStatsService';
@@ -99,15 +101,32 @@ export class ApiRouter {
             res.json(response);
         });
 
+        router.get('/account/preferences', async (req, res) => {
+            const user = await this.authService.getCurrentUser(req);
+            if (!user) {
+                res.status(401).json({ error: 'Sign in with Discord to view your account preferences.' });
+                return;
+            }
+
+            const preferences = await this.authRepository.getAccountPreferences(user.id);
+            if (!preferences) {
+                res.status(404).json({ error: 'Account not found.' });
+                return;
+            }
+
+            const response: AccountPreferencesResponse = { preferences };
+            res.json(response);
+        });
+
         router.patch('/account', express.json(), async (req, res) => {
             const user = await this.authService.getCurrentUser(req);
             if (!user) {
-                res.status(401).json({ error: 'Sign in with Discord to update your username.' });
+                res.status(401).json({ error: 'Sign in with Discord to update your account.' });
                 return;
             }
 
             try {
-                const username = this.parseUsername(req.body);
+                const username = this.parseAccountProfileUpdate(req.body);
                 const updatedUser = await this.authRepository.updateUsername(user.id, username);
                 if (!updatedUser) {
                     res.status(404).json({ error: 'Account not found.' });
@@ -126,6 +145,26 @@ export class ApiRouter {
 
                 throw error;
             }
+        });
+
+        router.patch('/account/preferences', express.json(), async (req, res) => {
+            const user = await this.authService.getCurrentUser(req);
+            if (!user) {
+                res.status(401).json({ error: 'Sign in with Discord to update your account preferences.' });
+                return;
+            }
+
+            const preferences = this.parseAccountPreferencesUpdate(req.body);
+            const updatedPreferences = await this.authRepository.updateAccountPreferences(user.id, preferences);
+            if (!updatedPreferences) {
+                res.status(404).json({ error: 'Account not found.' });
+                return;
+            }
+
+            const response: AccountPreferencesResponse = {
+                preferences: updatedPreferences
+            };
+            res.json(response);
         });
 
         router.get('/sessions', (_req, res) => {
@@ -288,8 +327,12 @@ export class ApiRouter {
         };
     }
 
-    private parseUsername(body: unknown): string {
+    private parseAccountProfileUpdate(body: unknown): string {
         return zUpdateAccountProfileRequest.parse(body ?? {}).username;
+    }
+
+    private parseAccountPreferencesUpdate(body: unknown): AccountPreferencesResponse['preferences'] {
+        return zUpdateAccountPreferencesRequest.parse(body ?? {}).preferences;
     }
 
     private async buildAccountStatistics(user: AccountUserProfile): Promise<AccountStatisticsResponse['statistics']> {

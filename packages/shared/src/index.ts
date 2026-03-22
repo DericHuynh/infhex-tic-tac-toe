@@ -428,6 +428,14 @@ export const zAccountStatistics = z.object({
 });
 export type AccountStatistics = z.infer<typeof zAccountStatistics>;
 
+export const zAccountPreferences = z.object({
+    moveConfirmation: z.boolean().default(false),
+    tilePieceMarkers: z.boolean().default(false)
+});
+export type AccountPreferences = z.infer<typeof zAccountPreferences>;
+
+export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = zAccountPreferences.parse({});
+
 export const zAccountProfile = z.object({
     id: zIdentifier,
     username: z.string(),
@@ -448,6 +456,11 @@ export const zAccountStatisticsResponse = z.object({
     statistics: zAccountStatistics
 });
 export type AccountStatisticsResponse = z.infer<typeof zAccountStatisticsResponse>;
+
+export const zAccountPreferencesResponse = z.object({
+    preferences: zAccountPreferences
+});
+export type AccountPreferencesResponse = z.infer<typeof zAccountPreferencesResponse>;
 
 export const zAdminStatGameBase = z.object({
     gameId: zIdentifier,
@@ -523,6 +536,11 @@ export const zUpdateAccountProfileRequest = z.object({
     username: zNormalizedUsername
 });
 export type UpdateAccountProfileRequest = z.infer<typeof zUpdateAccountProfileRequest>;
+
+export const zUpdateAccountPreferencesRequest = z.object({
+    preferences: zAccountPreferences
+});
+export type UpdateAccountPreferencesRequest = z.infer<typeof zUpdateAccountPreferencesRequest>;
 
 export const zSocketIOClientAuthPayload = z.object({
     deviceId: z.uuidv4(),

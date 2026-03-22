@@ -1,5 +1,6 @@
 import { dehydrate, QueryClient } from '@tanstack/react-query'
 import type {
+  AccountPreferencesResponse,
   AccountResponse,
   FinishedGameRecord,
   FinishedGamesPage,
@@ -81,6 +82,12 @@ export class FrontendSsrRenderer {
     }
 
     queryClient.setQueryData(['account'], accountResponse)
+    if (currentUser) {
+      const accountPreferencesResponse: AccountPreferencesResponse = {
+        preferences: await this.dependencies.authService.getCurrentUserPreferences(req)
+      }
+      queryClient.setQueryData(['account', 'preferences'], accountPreferencesResponse)
+    }
 
     await this.prefetchRouteData(queryClient, requestUrl, currentUser?.id ?? null)
 

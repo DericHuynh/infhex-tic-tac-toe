@@ -220,12 +220,16 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
                       className=" bg-slate-950 mx-auto w-full max-w-[92rem] rounded-2xl lg:border border-sky-300/10 bg-slate-950/96 p-2 shadow-[0_18px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl"
                     >
                       <div className="space-y-1">
-                        <MenuLink to="/account/profile" label="Profile" onSelect={() => setIsAccountMenuOpen(false)} />
                         <MenuLink to="/account/games" label="Match History" onSelect={() => setIsAccountMenuOpen(false)} />
-                        {account.role === 'admin' && (
-                          <MenuLink to="/admin" label="Admin Controls" onSelect={() => setIsAccountMenuOpen(false)} />
-                        )}
+                        <MenuLink to="/account/preferences" label="Preferences" onSelect={() => setIsAccountMenuOpen(false)} />
+                        <MenuLink to="/account/profile" label="Profile" onSelect={() => setIsAccountMenuOpen(false)} />
                       </div>
+
+                      {account.role === 'admin' && (
+                        <div className="mt-2 border-t border-amber-300/10 pt-2">
+                          <MenuLink to="/admin" label="Admin Controls" onSelect={() => setIsAccountMenuOpen(false)} />
+                        </div>
+                      )}
 
                       <div className="mt-2 border-t border-amber-300/10 pt-2">
                         <button

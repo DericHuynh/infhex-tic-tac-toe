@@ -1,4 +1,5 @@
 import type {
+  AccountPreferencesResponse,
   AccountResponse,
   AccountStatisticsResponse,
   Leaderboard,
@@ -30,6 +31,10 @@ async function fetchAvailableSessions() {
 
 async function fetchAccount() {
   return await fetchJson<AccountResponse>('/api/account')
+}
+
+async function fetchAccountPreferences() {
+  return await fetchJson<AccountPreferencesResponse>('/api/account/preferences')
 }
 
 async function fetchAccountStatistics() {
@@ -80,6 +85,16 @@ export function useQueryAccount(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.account,
     queryFn: fetchAccount,
+    enabled: options?.enabled,
+
+    staleTime: 10 * 60 * 1000
+  })
+}
+
+export function useQueryAccountPreferences(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.accountPreferences,
+    queryFn: fetchAccountPreferences,
     enabled: options?.enabled,
 
     staleTime: 10 * 60 * 1000
