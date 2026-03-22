@@ -115,7 +115,7 @@ function GameScreenHud({
           <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tic-Tac-Toe</h1>
           <div className="mt-2 text-sm text-slate-300">
             Connect 6 hexagons in a row.<br />
-            {localPlayerId ? 'Tap to place, drag to pan, pinch to zoom.' : 'Drag to pan and pinch to zoom while the players battle it out.'}
+            {localPlayerId ? 'Tap to place, drag to pan, pinch to zoom, right-drag to draw and right-click a line to erase.' : 'Drag to pan, pinch to zoom, right-drag to draw and right-click a line to erase.'}
           </div>
 
           {shutdown && shutdownCountdownMs !== null && (

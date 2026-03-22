@@ -119,6 +119,32 @@ export function sameCell(a: HexCell | null, b: HexCell | null) {
   return a.x === b.x && a.y === b.y
 }
 
+export function buildHexLine(start: HexCell, end: HexCell): HexCell[] {
+  const distance = hexDistance(start, end)
+  if (distance === 0) {
+    return [{ x: start.x, y: start.y }]
+  }
+
+  const startCube = axialToCube(start)
+  const endCube = axialToCube(end)
+  const cells: HexCell[] = []
+
+  for (let step = 0; step <= distance; step += 1) {
+    const progress = step / distance
+    const cube = roundCube({
+      x: lerp(startCube.x, endCube.x, progress),
+      y: lerp(startCube.y, endCube.y, progress),
+      z: lerp(startCube.z, endCube.z, progress)
+    })
+    const cell = { x: cube.x, y: cube.z }
+    if (!sameCell(cells[cells.length - 1] ?? null, cell)) {
+      cells.push(cell)
+    }
+  }
+
+  return cells
+}
+
 export function formatCountdown(milliseconds: number | null): string {
   if (milliseconds === null) {
     return '--:--'
@@ -205,6 +231,18 @@ export function buildRenderableCells(cells: BoardCell[], tileConfigs: Record<str
 
 function hexDistance(a: HexCell, b: HexCell): number {
   return getHexDistance(a, b)
+}
+
+function axialToCube(cell: HexCell): CubeCell {
+  return {
+    x: cell.x,
+    y: -cell.x - cell.y,
+    z: cell.y
+  }
+}
+
+function lerp(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress
 }
 
 function roundAxial(x: number, y: number): HexCell {

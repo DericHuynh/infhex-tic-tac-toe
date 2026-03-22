@@ -5,6 +5,7 @@ interface GameBoardCanvasProps {
   className: string
   handlers: Pick<
     CanvasHTMLAttributes<HTMLCanvasElement>,
+    | 'onContextMenu'
     | 'onMouseDown'
     | 'onMouseMove'
     | 'onMouseLeave'
