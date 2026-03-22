@@ -1,5 +1,7 @@
 FROM node:22-alpine AS build
 
+ARG GITHUB_SHA
+
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
