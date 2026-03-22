@@ -31,9 +31,9 @@ const timeControlModeOptions: Array<{
   description: string
 }> = [
     {
-      value: 'unlimited',
-      title: 'Unlimited',
-      description: 'No clock configured.'
+      value: 'match',
+      title: 'Match Based',
+      description: 'A main clock between 1m and 60m plus an increment between 0s and 5m.'
     },
     {
       value: 'turn',
@@ -41,10 +41,10 @@ const timeControlModeOptions: Array<{
       description: 'A time limit per move between 5s and 120s.'
     },
     {
-      value: 'match',
-      title: 'Match Based',
-      description: 'A main clock between 1m and 60m plus an increment between 0s and 5m.'
-    }
+      value: 'unlimited',
+      title: 'Unlimited',
+      description: 'No clock configured.'
+    },
   ]
 
 const TURN_TIME_STEP_SECONDS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const
@@ -94,7 +94,7 @@ function CreateLobbyDialog({
 }: Readonly<CreateLobbyDialogProps>) {
   const canCreateRatedLobby = Boolean(account)
   const [visibility, setVisibility] = useState<LobbyVisibility>('public')
-  const [timeControlMode, setTimeControlMode] = useState<GameTimeControl['mode']>('turn')
+  const [timeControlMode, setTimeControlMode] = useState<GameTimeControl['mode']>('match')
   const [rated, setRated] = useState(canCreateRatedLobby)
   const [turnTimeStepIndex, setTurnTimeStepIndex] = useState(TURN_TIME_STEP_SECONDS.indexOf(TURN_TIME_DEFAULT))
   const [matchTimeStepIndex, setMatchTimeStepIndex] = useState(MATCH_TIME_STEP_MINUTES.indexOf(MATCH_TIME_DEFAULT))
