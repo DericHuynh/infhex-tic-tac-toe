@@ -112,8 +112,8 @@ function LobbyScreen({
         account={account}
         onCreateLobby={onHostGame}
       />
-      <div className="mx-auto flex gap-4 flex-col lg:flex-row lg:gap-8 lg:min-h-0 h-full flex-1 mt-4 lg:mt-[8vh]">
-        <section className="w-full relative flex rounded-[1.75rem] border-white/10 bg-white/6 p-6 sm:min-h-[34rem] sm:rounded-[2rem] sm:p-8 md:p-10 sm:h-[34rem]">
+      <div className="mx-auto gap-4 lg:gap-8 lg:min-h-0 h-full flex-1 mt-4 lg:mt-[8vh] flex flex-col lg:grid lg:grid-cols-2">
+        <section className="max-w-xl relative flex rounded-[1.75rem] border-white/10 bg-white/6 p-6 sm:min-h-[34rem] sm:rounded-[2rem] sm:p-8 md:p-10 sm:h-[34rem]">
           <div className="relative flex flex-1 flex-col justify-center">
             <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-amber-100 sm:px-4 sm:text-xs sm:tracking-[0.35em]">
               Two Players
@@ -190,7 +190,7 @@ function LobbyScreen({
 
         </section>
 
-        <section className="w-full rounded-[2rem] border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
+        <section className="max-w-xl rounded-[2rem] border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-sky-200/80">Live Sessions</p>
