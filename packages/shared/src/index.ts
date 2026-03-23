@@ -719,6 +719,7 @@ export const zAccountPreferences = z.object({
     moveConfirmation: z.boolean().default(false),
     autoPlaceOriginTile: z.boolean().default(false),
     tilePieceMarkers: z.boolean().default(false),
+    allowSelfJoinCasualGames: z.boolean().default(false),
     changelogReadAt: z.number().int().nonnegative().nullable().default(null)
 });
 export type AccountPreferences = z.infer<typeof zAccountPreferences>;

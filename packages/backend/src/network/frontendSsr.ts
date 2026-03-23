@@ -89,7 +89,7 @@ export class FrontendSsrRenderer {
   async render(req: express.Request): Promise<FrontendRenderResult> {
     const renderedAt = Date.now()
     const queryClient = createQueryClient()
-    const currentUser = await this.dependencies.authService.getCurrentUser(req)
+    const currentUser = await this.dependencies.authService.getUserFromRequest(req)
     const requestUrl = new URL(req.originalUrl || req.url, `${req.protocol}://${req.get('host')}`)
     const accountResponse: AccountResponse = {
       user: currentUser
@@ -98,7 +98,7 @@ export class FrontendSsrRenderer {
     queryClient.setQueryData(queryKeys.account, accountResponse)
     if (currentUser) {
       const accountPreferencesResponse: AccountPreferencesResponse = {
-        preferences: await this.dependencies.authService.getCurrentUserPreferences(req)
+        preferences: await this.dependencies.authService.getUserPreferences(currentUser.id)
       }
       queryClient.setQueryData(queryKeys.accountPreferences, accountPreferencesResponse)
     }

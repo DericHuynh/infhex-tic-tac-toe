@@ -3,6 +3,7 @@ import { Server, type Socket } from 'socket.io';
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import {
+    DEFAULT_ACCOUNT_PREFERENCES,
     type AdminBroadcastMessage,
     type ClientToServerEvents,
     type LobbyInfo,
@@ -162,12 +163,15 @@ export class SocketServerGateway {
                 }
 
                 const session = this.sessionManager.requireSession(request.sessionId);
-                const user = await this.authService.getCurrentUserFromSocket(socket);
+                const user = await this.authService.getUserFromSocket(socket);
+                const preferences = user ? await this.authService.getUserPreferences(user.id) : DEFAULT_ACCOUNT_PREFERENCES;
                 const { participant, role } = await this.sessionManager.joinSession(session, {
                     deviceId: clientInfo.deviceId,
 
                     profile: user,
-                    displayName: user?.username ?? clientInfo.deviceId.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase()
+                    displayName: user?.username ?? clientInfo.deviceId.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase(),
+
+                    allowSelfJoinCasualGames: preferences.allowSelfJoinCasualGames
                 });
 
                 const gameParticipation = this.sessionManager.assignParticipantSocket(

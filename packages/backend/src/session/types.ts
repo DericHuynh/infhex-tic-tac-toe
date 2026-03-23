@@ -66,6 +66,7 @@ export interface JoinSessionParams {
 
     profile: AccountUserProfile | null;
     displayName: string;
+    allowSelfJoinCasualGames: boolean;
 }
 
 export interface CreateSessionParams {

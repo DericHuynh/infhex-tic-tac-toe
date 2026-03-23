@@ -97,13 +97,13 @@ export class ApiRouter {
         const router = express.Router();
 
         router.get('/account', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             const response: AccountResponse = { user };
             res.json(response);
         });
 
         router.get('/account/statistics', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to view your statistics.' });
                 return;
@@ -142,7 +142,7 @@ export class ApiRouter {
         });
 
         router.get('/account/preferences', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to view your account preferences.' });
                 return;
@@ -159,7 +159,7 @@ export class ApiRouter {
         });
 
         router.patch('/account', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to update your account.' });
                 return;
@@ -188,7 +188,7 @@ export class ApiRouter {
         });
 
         router.patch('/account/preferences', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to update your account preferences.' });
                 return;
@@ -215,7 +215,7 @@ export class ApiRouter {
             const query = zFinishedGamesQuery.parse(req.query);
             const view = query.view ?? 'all';
             const currentUser = view === 'mine'
-                ? await this.authService.getCurrentUser(req)
+                ? await this.authService.getUserFromRequest(req)
                 : null;
 
             if (view === 'mine' && !currentUser) {
@@ -243,13 +243,13 @@ export class ApiRouter {
         });
 
         router.get('/leaderboard', async (req, res) => {
-            const currentUser = await this.authService.getCurrentUser(req);
+            const currentUser = await this.authService.getUserFromRequest(req);
             const response: Leaderboard = await this.leaderboardService.getLeaderboardSnapshot(currentUser?.id ?? null);
             res.json(response);
         });
 
         router.post('/sandbox-positions', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to share sandbox positions.' });
                 return;
@@ -378,7 +378,7 @@ export class ApiRouter {
             try {
                 const lobbyOptions = this.parseLobbyOptions(req.body);
                 const currentUser = lobbyOptions.rated
-                    ? await this.authService.getCurrentUser(req)
+                    ? await this.authService.getUserFromRequest(req)
                     : null;
 
                 if (lobbyOptions.rated && !currentUser) {
@@ -470,7 +470,7 @@ export class ApiRouter {
     }
 
     private async requireAdminUser(req: express.Request, res: express.Response): Promise<AccountUserProfile | null> {
-        const user = await this.authService.getCurrentUser(req);
+        const user = await this.authService.getUserFromRequest(req);
         if (!user) {
             res.status(401).json({ error: 'Sign in as an admin to view this page.' });
             return null;

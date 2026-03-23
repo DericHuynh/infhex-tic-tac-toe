@@ -236,8 +236,25 @@ export class SessionManager {
                     throw new SessionError('Session is full');
                 }
 
-                if (session.gameOptions.rated && profileId && session.players.some((player) => player.profileId === profileId)) {
-                    throw new SessionError('You cannot join your own rated lobby as the second player.');
+                if (profileId && session.players.some((player) => player.profileId === profileId)) {
+                    /* a player with that profile is already in the lobby */
+                    if (session.gameOptions.rated) {
+                        throw new SessionError('You cannot join your own rated lobby as the second player.');
+                    } else if (!params.allowSelfJoinCasualGames) {
+                        throw new SessionError('You cannot join your own casual lobby as the second player unless you enabled this in your account preferences.');
+                    }
+                }
+
+                /* ensure unique display names */
+                let displayName = params.displayName;
+                {
+                    const baseName = params.displayName;
+
+                    let index = 2;
+                    while (session.players.some((player) => player.displayName === displayName)) {
+                        displayName = `${baseName} #${index}`;
+                        index += 1;
+                    }
                 }
 
                 participantRole = "player";
@@ -246,7 +263,7 @@ export class SessionManager {
 
                     deviceId: params.deviceId,
                     profileId: params.profile?.id ?? null,
-                    displayName: params.displayName,
+                    displayName,
 
                     elo: rating?.elo ?? null,
                     eloChange: null,

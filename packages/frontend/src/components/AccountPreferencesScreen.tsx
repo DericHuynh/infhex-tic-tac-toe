@@ -137,7 +137,7 @@ function AccountPreferencesScreen({
     <PageCorpus
       category="Preferences"
       title="Account Preferences"
-      description="Manage your personal gameplay display and move-handling settings."
+      description="Manage your personal gameplay, display, and matchmaking settings."
     >
       <div className="min-h-0 flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
         {isLoading ? (
@@ -196,6 +196,14 @@ function AccountPreferencesScreen({
                     disabled={isSavingPreference}
                     isSaving={savingPreferenceKey === 'autoPlaceOriginTile'}
                     onToggle={(nextChecked) => void handlePreferenceToggle('autoPlaceOriginTile', nextChecked)}
+                  />
+                  <PreferenceSwitchCard
+                    label="Allow Self-Joining Casual Lobbies"
+                    description="Allow you to join your own online casual lobby as the second player."
+                    checked={preferences.allowSelfJoinCasualGames}
+                    disabled={isSavingPreference}
+                    isSaving={savingPreferenceKey === 'allowSelfJoinCasualGames'}
+                    onToggle={(nextChecked) => void handlePreferenceToggle('allowSelfJoinCasualGames', nextChecked)}
                   />
                 </div>
               ) : (
