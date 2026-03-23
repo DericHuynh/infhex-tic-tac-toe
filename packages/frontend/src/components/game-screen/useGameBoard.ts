@@ -313,7 +313,6 @@ function useGameBoard({
             }
         }
 
-        console.log("Calc -> %o | %o", highlightedCellKeys, highlightedCells);
         return highlightedCellKeys;
     }, [highlightedCells, !Array.isArray(highlightedCells) && gameState.cells])
 
