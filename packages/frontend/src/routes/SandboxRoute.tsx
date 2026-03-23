@@ -40,6 +40,7 @@ function createSandboxGameState() {
 
 function SandboxRoute() {
   const [gameState, setGameState] = useState(() => createSandboxGameState())
+  const [gameHistory, setGameHistory] = useState<Array<ReturnType<typeof cloneGameState>>>([])
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState(true)
   const [isWinnerBannerVisible, setIsWinnerBannerVisible] = useState(false)
@@ -66,6 +67,7 @@ function SandboxRoute() {
         nextGameState.currentTurnExpiresAt = null
       }
 
+      setGameHistory((currentHistory) => [...currentHistory, cloneGameState(gameState)])
       setGameState(nextGameState)
       setWinnerId(result.winningPlayerId)
       setIsWinnerBannerVisible(Boolean(result.winningPlayerId))
@@ -105,10 +107,26 @@ function SandboxRoute() {
   const restartSandbox = () => {
     const nextGameState = createSandboxGameState()
     previousCellCountRef.current = nextGameState.cells.length
+    setGameHistory([])
     setGameState(nextGameState)
     setWinnerId(null)
     setIsWinnerBannerVisible(false)
   }
+
+  const takeBackMove = () => {
+    const previousGameState = gameHistory[gameHistory.length - 1]
+    if (!previousGameState) {
+      return
+    }
+
+    previousCellCountRef.current = previousGameState.cells.length
+    setGameHistory((currentHistory) => currentHistory.slice(0, -1))
+    setGameState(cloneGameState(previousGameState))
+    setWinnerId(null)
+    setIsWinnerBannerVisible(false)
+  }
+
+  const canTakeBack = gameHistory.length > 0
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-950 text-white">
@@ -148,7 +166,9 @@ function SandboxRoute() {
               occupiedCellCount={gameState.cells.length}
               renderableCellCount={renderableCellCount}
               onNewBoard={restartSandbox}
+              onTakeBack={takeBackMove}
               onResetView={resetView}
+              canTakeBack={canTakeBack}
             />
           )}
         </div>

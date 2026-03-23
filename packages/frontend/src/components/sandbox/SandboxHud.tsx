@@ -4,14 +4,18 @@ interface SandboxHudProps {
   occupiedCellCount: number
   renderableCellCount: number
   onNewBoard: () => void
+  onTakeBack: () => void
   onResetView: () => void
+  canTakeBack: boolean
 }
 
 function SandboxHud({
   occupiedCellCount,
   renderableCellCount,
   onNewBoard,
-  onResetView
+  onTakeBack,
+  onResetView,
+  canTakeBack
 }: Readonly<SandboxHudProps>) {
   const [isHudOpen, setIsHudOpen] = useState(true)
 
@@ -39,7 +43,7 @@ function SandboxHud({
           className="
             pointer-events-auto absolute bottom-0 left-0 right-0 w-auto rounded-t-[1.5rem] bg-slate-800 px-4 py-4 pb-4 text-left
             shadow-[0_12px_45px_rgba(15,23,42,0.22)] backdrop-blur-md
-            md:left-0 md:w-full md:max-w-sm md:rounded-tl-none md:rounded-tr-[1.5rem]
+            md:left-0 md:w-full md:max-w-md md:rounded-tl-none md:rounded-tr-[1.5rem]
           "
         >
           <div className="pointer-events-auto absolute right-3 top-3 z-10">
@@ -69,19 +73,32 @@ function SandboxHud({
             <div className="text-slate-300">{occupiedCellCount} occupied</div>
           </div>
 
-          <div className="pointer-events-auto mt-4 grid grid-cols-2 gap-2">
-            <button
-              onClick={onNewBoard}
-              className="min-w-[9rem] flex-1 rounded-full bg-emerald-500 px-4 py-2 font-medium shadow-lg transition hover:bg-emerald-400 md:flex-none"
-            >
-              New Board
-            </button>
+          <div className="pointer-events-auto mt-5">
             <button
               onClick={onResetView}
-              className="min-w-[9rem] flex-1 rounded-full bg-sky-600 px-4 py-2 font-medium shadow-lg transition hover:bg-sky-500 md:flex-none"
+              className="w-full rounded-full bg-cyan-500 px-5 py-3 font-medium text-slate-950 shadow-lg transition hover:bg-cyan-400"
             >
               Reset View
             </button>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                onClick={onNewBoard}
+                className="w-full rounded-full bg-emerald-500 px-5 py-3 font-medium text-slate-950 shadow-lg transition hover:bg-emerald-400"
+              >
+                New Board
+              </button>
+              <button
+                onClick={onTakeBack}
+                disabled={!canTakeBack}
+                className={`w-full rounded-full px-5 py-3 font-medium shadow-lg transition ${canTakeBack
+                  ? 'bg-amber-400 text-slate-950 hover:bg-amber-300'
+                  : 'cursor-not-allowed bg-slate-600/70 text-slate-300'
+                  }`}
+              >
+                Undo Move
+              </button>
+            </div>
           </div>
         </div>
       )}
