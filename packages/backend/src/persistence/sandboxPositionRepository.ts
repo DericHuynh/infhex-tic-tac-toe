@@ -1,0 +1,113 @@
+import type { Logger } from 'pino';
+import type { Collection, Document } from 'mongodb';
+import { inject, injectable } from 'tsyringe';
+import { z } from 'zod';
+import {
+    type SandboxGamePosition,
+    type SandboxPositionName,
+    zSandboxGamePosition,
+    zSandboxPositionId,
+    zSandboxPositionName,
+} from '@ih3t/shared';
+import { ROOT_LOGGER } from '../logger';
+import { MongoDatabase } from './mongoClient';
+
+const sandboxPositionsCollectionName = process.env.MONGODB_SANDBOX_POSITIONS_COLLECTION ?? 'sandboxPositions';
+
+const zSandboxPositionDocument = z.object({
+    id: zSandboxPositionId,
+    name: zSandboxPositionName,
+    gamePosition: zSandboxGamePosition,
+    createdAt: z.number().int().nonnegative(),
+    createdBy: z.string().trim().min(1),
+    loadCount: z.number().int().nonnegative()
+});
+
+type SandboxPositionDocument = z.infer<typeof zSandboxPositionDocument> & Document;
+
+interface CreateSandboxPositionDocumentParams {
+    id: string;
+    name: SandboxPositionName;
+    gamePosition: SandboxGamePosition;
+    createdAt: number;
+    createdBy: string;
+}
+
+export interface LoadedSandboxPositionRecord {
+    name: SandboxPositionName;
+    gamePosition: SandboxGamePosition;
+}
+
+@injectable()
+export class SandboxPositionRepository {
+    private collectionPromise: Promise<Collection<SandboxPositionDocument>> | null = null;
+    private readonly logger: Logger;
+
+    constructor(
+        @inject(ROOT_LOGGER) rootLogger: Logger,
+        @inject(MongoDatabase) private readonly mongoDatabase: MongoDatabase
+    ) {
+        this.logger = rootLogger.child({ component: 'sandbox-position-repository' });
+    }
+
+    async createPosition(params: CreateSandboxPositionDocumentParams): Promise<string> {
+        const collection = await this.getCollection();
+        const document = zSandboxPositionDocument.parse({
+            id: params.id,
+            name: params.name,
+            gamePosition: params.gamePosition,
+            createdAt: params.createdAt,
+            createdBy: params.createdBy,
+            loadCount: 0
+        });
+
+        await collection.insertOne(document);
+        return document.id;
+    }
+
+    async getPositionAndIncrementLoadCount(id: string): Promise<LoadedSandboxPositionRecord | null> {
+        const collection = await this.getCollection();
+        const document = await collection.findOneAndUpdate(
+            { id },
+            {
+                $inc: {
+                    loadCount: 1
+                }
+            },
+            {
+                returnDocument: 'after'
+            }
+        );
+
+        if (!document) {
+            return null;
+        }
+
+        const parsedDocument = zSandboxPositionDocument.parse(document);
+        return {
+            name: parsedDocument.name,
+            gamePosition: parsedDocument.gamePosition
+        };
+    }
+
+    private async getCollection(): Promise<Collection<SandboxPositionDocument>> {
+        if (this.collectionPromise !== null) {
+            return this.collectionPromise;
+        }
+
+        this.collectionPromise = (async () => {
+            const database = await this.mongoDatabase.getDatabase();
+            const collection = database.collection<SandboxPositionDocument>(sandboxPositionsCollectionName);
+            await collection.createIndex({ id: 1 }, { unique: true });
+            await collection.createIndex({ createdBy: 1, createdAt: -1 });
+            await collection.createIndex({ createdAt: -1 });
+            return collection;
+        })().catch((error: unknown) => {
+            this.collectionPromise = null;
+            this.logger.error({ err: error, event: 'sandbox-positions.init.failed' }, 'Failed to initialize sandbox positions collection');
+            throw error;
+        });
+
+        return this.collectionPromise;
+    }
+}

@@ -6,7 +6,8 @@ import type {
   AdminStatsResponse,
   FinishedGameRecord,
   FinishedGamesPage,
-  LobbyInfo
+  LobbyInfo,
+  SandboxPositionResponse
 } from '@ih3t/shared'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { fetchAdminServerSettings } from './adminClient'
@@ -74,6 +75,10 @@ async function fetchFinishedGames(
 
 async function fetchFinishedGame(gameId: string) {
   return await fetchJson<FinishedGameRecord>(`/api/finished-games/${encodeURIComponent(gameId)}`)
+}
+
+export async function fetchSandboxPosition(positionId: string) {
+  return await fetchJson<SandboxPositionResponse>(`/api/sandbox-positions/${encodeURIComponent(positionId)}`)
 }
 
 export function useQueryAvailableSessions(options?: { enabled?: boolean }) {
@@ -179,6 +184,21 @@ export function useQueryFinishedGame(gameId: string | null, options?: { enabled?
       return fetchFinishedGame(gameId)
     },
     enabled: Boolean(gameId) && options?.enabled,
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+export function useQuerySandboxPosition(positionId: string | null, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: positionId ? queryKeys.sandboxPosition(positionId) : ['sandbox-position', 'unknown'],
+    queryFn: () => {
+      if (!positionId) {
+        throw new Error('Missing sandbox position id.')
+      }
+
+      return fetchSandboxPosition(positionId)
+    },
+    enabled: Boolean(positionId) && options?.enabled,
     staleTime: 60 * 60 * 1000,
   })
 }

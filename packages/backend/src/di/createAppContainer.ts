@@ -17,6 +17,8 @@ import { ServerSettingsRepository } from '../persistence/serverSettingsRepositor
 import { GameHistoryRepository } from '../persistence/gameHistoryRepository';
 import { MongoDatabase } from '../persistence/mongoClient';
 import { MetricsRepository } from '../persistence/metricsRepository';
+import { SandboxPositionRepository } from '../persistence/sandboxPositionRepository';
+import { SandboxPositionService } from '../sandbox/sandboxPositionService';
 import { SessionManager } from '../session/sessionManager';
 import { GameSimulation } from '../simulation/gameSimulation';
 import { GameTimeControlManager } from '../simulation/gameTimeControlManager';
@@ -45,6 +47,8 @@ export function createAppContainer(): DependencyContainer {
     appContainer.registerSingleton(GameHistoryRepository);
     appContainer.registerSingleton(MetricsRepository);
     appContainer.registerSingleton(MetricsTracker);
+    appContainer.registerSingleton(SandboxPositionRepository);
+    appContainer.registerSingleton(SandboxPositionService);
     appContainer.registerSingleton(SessionManager);
     appContainer.registerSingleton(CorsConfiguration);
     appContainer.registerSingleton(ApiRouter);

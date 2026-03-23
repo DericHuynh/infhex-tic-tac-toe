@@ -56,6 +56,7 @@ export function createAppRoutes() {
         </Route>
         <Route element={<CommonPageLayout limitWidth={false} />}>
           <Route path="/sandbox" element={<SandboxRoute />} />
+          <Route path="/sandbox/:positionId" element={<SandboxRoute />} />
           <Route path="/session/:sessionId" element={<SessionRoute />} />
         </Route>
       </Route>

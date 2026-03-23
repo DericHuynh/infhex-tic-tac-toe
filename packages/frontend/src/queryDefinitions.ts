@@ -11,6 +11,7 @@ export const queryKeys = {
   adminStats: (timezoneOffsetMinutes: number) => ['admin', 'stats', timezoneOffsetMinutes] as const,
   leaderboard: ['leaderboard'] as const,
   availableSessions: ['sessions', 'available'] as const,
+  sandboxPosition: (positionId: string) => ['sandbox-position', positionId] as const,
   finishedGames: ['finished-games'] as const,
   finishedGamesPage: (view: FinishedGamesArchiveView, page: number, pageSize: number, baseTimestamp: number) =>
     ['finished-games', view, page, pageSize, baseTimestamp] as const,

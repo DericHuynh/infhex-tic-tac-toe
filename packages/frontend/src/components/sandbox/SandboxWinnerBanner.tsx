@@ -5,7 +5,7 @@ interface SandboxWinnerBannerProps {
   players: SessionParticipant[]
   gameState: GameState
   winnerId: string | null
-  onNewBoard: () => void
+  onResetBoard: () => void
   onExploreBoard: () => void
 }
 
@@ -13,7 +13,7 @@ function SandboxWinnerBanner({
   players,
   gameState,
   winnerId,
-  onNewBoard,
+  onResetBoard,
   onExploreBoard
 }: Readonly<SandboxWinnerBannerProps>) {
   if (!winnerId) {
@@ -37,7 +37,7 @@ function SandboxWinnerBanner({
               {winnerLabel} Wins
             </div>
             <div className="mt-3 text-sm text-slate-200 sm:text-base">
-              Start a new board to keep exploring lines.
+              Reset the board to play the position again.
             </div>
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -48,10 +48,10 @@ function SandboxWinnerBanner({
               Explore Board
             </button>
             <button
-              onClick={onNewBoard}
+              onClick={onResetBoard}
               className="rounded-full bg-amber-300 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-amber-200"
             >
-              New Board
+              Reset Board
             </button>
           </div>
         </div>

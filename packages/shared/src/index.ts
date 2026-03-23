@@ -204,6 +204,49 @@ export type GameState = z.infer<typeof GameState>;
 export const zBoardState = GameState;
 export type BoardState = GameState;
 
+export const zSandboxPositionId = z.string().trim().regex(/^[a-z0-9]{7}$/i);
+export type SandboxPositionId = z.infer<typeof zSandboxPositionId>;
+
+export const zSandboxPositionName = z.string().trim().min(1).max(80);
+export type SandboxPositionName = z.infer<typeof zSandboxPositionName>;
+
+export const zSandboxPlayerSlot = z.enum(['player-1', 'player-2']);
+export type SandboxPlayerSlot = z.infer<typeof zSandboxPlayerSlot>;
+
+export const zSandboxPositionCell = z.object({
+    x: zCoordinate,
+    y: zCoordinate,
+    player: zSandboxPlayerSlot,
+    moveId: z.number().int().positive()
+});
+export type SandboxPositionCell = z.infer<typeof zSandboxPositionCell>;
+
+export const zSandboxGamePosition = z.object({
+    cells: z.array(zSandboxPositionCell),
+    currentTurnPlayer: zSandboxPlayerSlot,
+    placementsRemaining: z.number().int().min(1).max(2)
+});
+export type SandboxGamePosition = z.infer<typeof zSandboxGamePosition>;
+
+export const zCreateSandboxPositionRequest = z.object({
+    name: zSandboxPositionName,
+    gamePosition: zSandboxGamePosition
+});
+export type CreateSandboxPositionRequest = z.infer<typeof zCreateSandboxPositionRequest>;
+
+export const zCreateSandboxPositionResponse = z.object({
+    id: zSandboxPositionId,
+    name: zSandboxPositionName
+});
+export type CreateSandboxPositionResponse = z.infer<typeof zCreateSandboxPositionResponse>;
+
+export const zSandboxPositionResponse = z.object({
+    id: zSandboxPositionId,
+    name: zSandboxPositionName,
+    gamePosition: zSandboxGamePosition
+});
+export type SandboxPositionResponse = z.infer<typeof zSandboxPositionResponse>;
+
 export interface ApplyGameMoveParams {
     playerId: string;
     x: number;

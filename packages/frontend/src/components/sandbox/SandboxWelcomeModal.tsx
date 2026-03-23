@@ -1,9 +1,14 @@
 interface SandboxWelcomeModalProps {
   isOpen: boolean
-  onClose: () => void
+  onStartCleanBoard: () => void
+  onImportPosition: () => void
 }
 
-function SandboxWelcomeModal({ isOpen, onClose }: Readonly<SandboxWelcomeModalProps>) {
+function SandboxWelcomeModal({
+  isOpen,
+  onStartCleanBoard,
+  onImportPosition
+}: Readonly<SandboxWelcomeModalProps>) {
   if (!isOpen) {
     return null
   }
@@ -19,14 +24,20 @@ function SandboxWelcomeModal({ isOpen, onClose }: Readonly<SandboxWelcomeModalPr
         </h1>
         <p className="mt-4 text-sm leading-6 text-slate-200 sm:text-base">
           Sandbox mode is a local pass-and-play board with no clock. You control both players, can try lines freely,
-          and can reset the board any time.
+          and can reset the board any time. Start from an empty board or load a shared position.
         </p>
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
-            onClick={onClose}
-            className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-300"
+            onClick={onImportPosition}
+            className="w-full rounded-full border border-white/15 bg-white/8 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:-translate-y-0.5 hover:bg-white/14"
           >
-            Start Exploring
+            Import Position
+          </button>
+          <button
+            onClick={onStartCleanBoard}
+            className="w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-300"
+          >
+            New Board
           </button>
         </div>
       </div>

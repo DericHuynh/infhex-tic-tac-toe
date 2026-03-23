@@ -13,12 +13,16 @@ import {
     type ServerSettings,
     type Leaderboard,
     DEFAULT_LOBBY_OPTIONS,
+    type CreateSandboxPositionResponse,
     type CreateSessionResponse,
     type LobbyOptions,
+    type SandboxPositionResponse,
+    zCreateSandboxPositionRequest,
     zAdminBroadcastMessageRequest,
     zAdminUpdateServerSettingsRequest,
     zAdminScheduleShutdownRequest,
     zLobbyVisibility,
+    zSandboxPositionId,
     zUpdateAccountPreferencesRequest,
     zUpdateAccountProfileRequest,
 } from '@ih3t/shared';
@@ -31,6 +35,7 @@ import { LeaderboardService } from '../../leaderboard/leaderboardService';
 import { getRequestClientInfo } from '../clientInfo';
 import { SocketServerGateway } from '../createSocketServer';
 import { GameHistoryRepository } from '../../persistence/gameHistoryRepository';
+import { SandboxPositionService } from '../../sandbox/sandboxPositionService';
 import { SessionError, SessionManager } from '../../session/sessionManager';
 
 const zPositiveInteger = z.coerce.number().int().positive();
@@ -83,7 +88,8 @@ export class ApiRouter {
         @inject(LeaderboardService) private readonly leaderboardService: LeaderboardService,
         @inject(SocketServerGateway) private readonly socketServerGateway: SocketServerGateway,
         @inject(SessionManager) private readonly sessionManager: SessionManager,
-        @inject(GameHistoryRepository) private readonly gameHistoryRepository: GameHistoryRepository
+        @inject(GameHistoryRepository) private readonly gameHistoryRepository: GameHistoryRepository,
+        @inject(SandboxPositionService) private readonly sandboxPositionService: SandboxPositionService
     ) {
         const router = express.Router();
 
@@ -210,6 +216,38 @@ export class ApiRouter {
         router.get('/leaderboard', async (req, res) => {
             const currentUser = await this.authService.getCurrentUser(req);
             const response: Leaderboard = await this.leaderboardService.getLeaderboardSnapshot(currentUser?.id ?? null);
+            res.json(response);
+        });
+
+        router.post('/sandbox-positions', express.json(), async (req, res) => {
+            const user = await this.authService.getCurrentUser(req);
+            if (!user) {
+                res.status(401).json({ error: 'Sign in with Discord to share sandbox positions.' });
+                return;
+            }
+
+            const request = zCreateSandboxPositionRequest.parse(req.body ?? {});
+            const id = await this.sandboxPositionService.createPosition(request.gamePosition, request.name, user.id);
+            const response: CreateSandboxPositionResponse = {
+                id,
+                name: request.name
+            };
+            res.json(response);
+        });
+
+        router.get('/sandbox-positions/:id', async (req, res) => {
+            const id = zSandboxPositionId.parse(String(req.params.id ?? '').trim().toLowerCase());
+            const sandboxPosition = await this.sandboxPositionService.loadPosition(id);
+            if (!sandboxPosition) {
+                res.status(404).json({ error: 'Sandbox position not found.' });
+                return;
+            }
+
+            const response: SandboxPositionResponse = {
+                id,
+                name: sandboxPosition.name,
+                gamePosition: sandboxPosition.gamePosition
+            };
             res.json(response);
         });
 
