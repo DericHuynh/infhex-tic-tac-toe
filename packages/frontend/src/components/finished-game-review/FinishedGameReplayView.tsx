@@ -8,11 +8,15 @@ import {
   type SandboxGamePosition
 } from '@ih3t/shared'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
+import { formatDateTimeWithSeconds } from '../../utils/dateTime'
+import { formatMinutesSeconds } from '../../utils/duration'
+import { formatEloChange } from '../../utils/elo'
+import { getPlayerLabel, getPlayerTileColor } from '../../utils/gameBoard'
+import { formatTimeControl } from '../../utils/gameTimeControl'
+import { getSessionFinishReasonSentenceLabel } from '../../utils/sessionResult'
 import GameBoardCanvas from '../game-screen/GameBoardCanvas'
 import useGameBoard from '../game-screen/useGameBoard'
-import { getPlayerLabel, getPlayerTileColor } from '../game-screen/gameBoardUtils'
-import { formatTimeControl } from '../../lobbyOptions'
 import FinishedGameReviewLayout from './FinishedGameReviewLayout'
 import type { SandboxRouteInitialPosition, SandboxRouteState } from '../../routes/sandboxRouteState'
 
@@ -20,6 +24,17 @@ interface FinishedGameReplayViewProps {
   game: FinishedGameRecord
   showTilePieceMarkers: boolean
   onRetry: () => void
+}
+
+function isEditableEventTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return target.isContentEditable
+    || target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
 }
 
 function ResetViewIcon() {
@@ -79,54 +94,33 @@ function EndIcon() {
   )
 }
 
-function formatDateTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'medium'
-  }).format(new Date(timestamp))
-}
-
-function formatElapsed(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.round(milliseconds / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
-
-function getFinishReasonLabel(reason: NonNullable<FinishedGameRecord['gameResult']>['reason'] | null | undefined) {
-  if (reason === 'six-in-a-row') {
-    return 'Six in a row'
-  }
-
-  if (reason === 'timeout') {
-    return 'Timeout'
-  }
-
-  if (reason === 'surrender') {
-    return 'Surrender'
-  }
-
-  if (reason === 'disconnect') {
-    return 'Disconnect'
-  }
-
-  return 'Terminated'
-}
-
-function formatEloChange(eloChange: number) {
-  return `${eloChange >= 0 ? '+' : ''}${eloChange}`
-}
-
 function buildReplayBoardState(game: FinishedGameRecord, visibleMoveCount: number): BoardState {
-  return {
-    ...createEmptyGameState(),
-    cells: game.moves.slice(0, visibleMoveCount).map((move) => ({
-      x: move.x,
-      y: move.y,
-      occupiedBy: move.playerId as CellOccupant
-    })),
-    playerTiles: game.playerTiles
+  const playerIds = game.players.map((player) => player.playerId)
+  if (playerIds.length === 0) {
+    return {
+      ...createEmptyGameState(),
+      playerTiles: game.playerTiles
+    }
   }
+
+  const replayGameState = createStartedGameState(playerIds)
+  replayGameState.playerTiles = game.playerTiles
+
+  for (const move of game.moves.slice(0, visibleMoveCount)) {
+    applyGameMove(replayGameState, {
+      playerId: move.playerId as CellOccupant,
+      x: move.x,
+      y: move.y
+    })
+
+    if (replayGameState.winner) {
+      replayGameState.currentTurnPlayerId = null
+      replayGameState.placementsRemaining = 0
+      replayGameState.currentTurnExpiresAt = null
+    }
+  }
+
+  return replayGameState
 }
 
 function buildReplaySandboxPosition(game: FinishedGameRecord, visibleMoveCount: number): SandboxRouteInitialPosition | null {
@@ -150,19 +144,11 @@ function buildReplaySandboxPosition(game: FinishedGameRecord, visibleMoveCount: 
       return null
     }
 
-    const moveResult = applyGameMove(replayGameState, {
+    applyGameMove(replayGameState, {
       playerId: replayPlayerId,
       x: move.x,
       y: move.y
     })
-
-    if (moveResult.winningPlayerId) {
-      replayGameState.currentTurnPlayerId = replayPlayerId === replayPlayerIds[0]
-        ? replayPlayerIds[1]
-        : replayPlayerIds[0]
-      replayGameState.placementsRemaining = 2
-      replayGameState.currentTurnExpiresAt = null
-    }
   }
 
   const currentTurnPlayer = replayGameState.currentTurnPlayerId === replayPlayerIds[1] ? 'player-2' : 'player-1'
@@ -188,6 +174,11 @@ function buildReplaySandboxPosition(game: FinishedGameRecord, visibleMoveCount: 
   }
 }
 
+function getProfileHref(profileId: string | null | undefined): string | null {
+  const normalizedProfileId = profileId?.trim()
+  return normalizedProfileId ? `/profile/${encodeURIComponent(normalizedProfileId)}` : null
+}
+
 function FinishedGameReplayView({
   game,
   showTilePieceMarkers,
@@ -196,28 +187,74 @@ function FinishedGameReplayView({
   const navigate = useNavigate()
   const [visibleMoveCount, setVisibleMoveCount] = useState(game.moves.length)
   const [isAutoPlaying, setIsAutoPlaying] = useState(false)
+  const totalMoveCount = game.moves.length
 
   useEffect(() => {
-    setVisibleMoveCount(game.moves.length)
+    setVisibleMoveCount(totalMoveCount)
     setIsAutoPlaying(false)
-  }, [game])
+  }, [game, totalMoveCount])
+
+  const goToStart = () => {
+    setIsAutoPlaying(false)
+    setVisibleMoveCount(0)
+  }
+
+  const goToPreviousMove = () => {
+    setIsAutoPlaying(false)
+    setVisibleMoveCount((currentCount) => Math.max(0, currentCount - 1))
+  }
+
+  const goToNextMove = () => {
+    setIsAutoPlaying(false)
+    setVisibleMoveCount((currentCount) => Math.min(totalMoveCount, currentCount + 1))
+  }
+
+  const goToEnd = () => {
+    setIsAutoPlaying(false)
+    setVisibleMoveCount(totalMoveCount)
+  }
 
   useEffect(() => {
     if (!isAutoPlaying) {
       return
     }
 
-    if (visibleMoveCount >= game.moves.length) {
+    if (visibleMoveCount >= totalMoveCount) {
       setIsAutoPlaying(false)
       return
     }
 
     const timeout = window.setTimeout(() => {
-      setVisibleMoveCount((currentCount) => Math.min(game.moves.length, currentCount + 1))
+      setVisibleMoveCount((currentCount) => Math.min(totalMoveCount, currentCount + 1))
     }, 700)
 
     return () => window.clearTimeout(timeout)
-  }, [game, isAutoPlaying, visibleMoveCount])
+  }, [isAutoPlaying, totalMoveCount, visibleMoveCount])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return
+      }
+
+      if (isEditableEventTarget(event.target)) {
+        return
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        setIsAutoPlaying(false)
+        setVisibleMoveCount((currentCount) => Math.max(0, currentCount - 1))
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        setIsAutoPlaying(false)
+        setVisibleMoveCount((currentCount) => Math.min(totalMoveCount, currentCount + 1))
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [totalMoveCount])
 
   const boardState = useMemo(
     () => buildReplayBoardState(game, visibleMoveCount),
@@ -244,15 +281,15 @@ function FinishedGameReplayView({
     renderableCellCount,
     resetView
   } = useGameBoard({
-    boardState,
-    highlightedCells,
+    gameState: boardState,
+    highlightedCells: boardState.winner?.cells ?? highlightedCells,
     localPlayerId: null,
     interactionEnabled: true,
     showTilePieceMarkers
   })
 
   const startPlayback = () => {
-    if (visibleMoveCount >= game.moves.length) {
+    if (visibleMoveCount >= totalMoveCount) {
       setVisibleMoveCount(0)
     }
 
@@ -321,33 +358,27 @@ function FinishedGameReplayView({
                     </div>
                     <div className="mt-1 break-words text-xs text-slate-300 sm:text-sm">
                       {activeMove
-                        ? `${formatDateTime(activeMove.timestamp)} • +${formatElapsed(activeMove.timestamp - game.startedAt)}`
-                        : `Started ${formatDateTime(game.startedAt)}`}
+                        ? `${formatDateTimeWithSeconds(activeMove.timestamp)} • +${formatMinutesSeconds(activeMove.timestamp - game.startedAt)}`
+                        : `Started ${formatDateTimeWithSeconds(game.startedAt)}`}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-5 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-                    <button
-                      onClick={() => {
-                        setIsAutoPlaying(false)
-                        setVisibleMoveCount(0)
-                      }}
-                      aria-label="Go to start"
-                      className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-                    >
+                  <button
+                    onClick={goToStart}
+                    aria-label="Go to start"
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+                  >
                       <span className="sm:hidden">
                         <StartIcon />
                       </span>
                       <span className="hidden sm:inline">Start</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsAutoPlaying(false)
-                        setVisibleMoveCount((currentCount) => Math.max(0, currentCount - 1))
-                      }}
-                      disabled={visibleMoveCount === 0}
-                      aria-label="Previous move"
-                      className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+                  <button
+                    onClick={goToPreviousMove}
+                    disabled={visibleMoveCount === 0}
+                    aria-label="Previous move"
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
                     >
                       <span className="sm:hidden">
                         <PreviousIcon />
@@ -371,28 +402,22 @@ function FinishedGameReplayView({
                       </span>
                       <span className="hidden sm:inline">{isAutoPlaying ? 'Pause' : 'Play'}</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsAutoPlaying(false)
-                        setVisibleMoveCount((currentCount) => Math.min(game.moves.length, currentCount + 1))
-                      }}
-                      disabled={visibleMoveCount >= game.moves.length}
-                      aria-label="Next move"
-                      className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-                    >
+                  <button
+                    onClick={goToNextMove}
+                    disabled={visibleMoveCount >= totalMoveCount}
+                    aria-label="Next move"
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+                  >
                       <span className="sm:hidden">
                         <NextIcon />
                       </span>
                       <span className="hidden sm:inline">Next</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsAutoPlaying(false)
-                        setVisibleMoveCount(game.moves.length)
-                      }}
-                      aria-label="Go to end"
-                      className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-                    >
+                  <button
+                    onClick={goToEnd}
+                    aria-label="Go to end"
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/8 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/14 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+                  >
                       <span className="sm:hidden">
                         <EndIcon />
                       </span>
@@ -412,10 +437,10 @@ function FinishedGameReplayView({
               <div>
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Finished</div>
                 <div className="mt-1 text-sm text-white">
-                  {formatDateTime(game.finishedAt ?? game.startedAt)}
+                  {formatDateTimeWithSeconds(game.finishedAt ?? game.startedAt)}
                 </div>
                 <div className="mt-1 text-sm text-white">
-                  Duration {formatElapsed(gameResult?.durationMs ?? 0)}
+                  Duration {formatMinutesSeconds(gameResult?.durationMs ?? 0)}
                 </div>
               </div>
 
@@ -436,45 +461,60 @@ function FinishedGameReplayView({
               <div>
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Finish Reason</div>
                 <div className="mt-1 text-sm text-white">
-                  {getFinishReasonLabel(gameResult?.reason)}
+                  {getSessionFinishReasonSentenceLabel(gameResult?.reason)}
                 </div>
               </div>
 
               <div>
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Players</div>
                 <div className="mt-1.5 space-y-0.5">
-                  {game.players.map((player) => (
-                    <div
-                      key={player.playerId}
-                      className="flex flex-col items-start gap-2 py-1 text-sm text-white sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: getPlayerTileColor(game.playerTiles, player.playerId) }}
-                        />
-                        <span className="break-words">{getPlayerLabel(game.players, player.playerId)}</span>
-                        {gameResult?.winningPlayerId === player.playerId && (
-                          <span className="rounded-full border border-amber-200/30 bg-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-black">
-                            Winner
-                          </span>
-                        )}
-                      </div>
+                  {game.players.map((player) => {
+                    const playerProfileHref = getProfileHref(player.profileId)
 
-                      <div className="w-full text-left sm:w-auto sm:text-right">
-                        {player.elo !== null && (
-                          <div className="text-sm font-medium text-white">
-                            {player.elo} ELO
-                          </div>
-                        )}
-                        {player.eloChange !== null && (
-                          <div className={`text-xs ${player.eloChange >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                            {formatEloChange(player.eloChange)}
-                          </div>
-                        )}
+                    return (
+                      <div
+                        key={player.playerId}
+                        className="flex flex-col items-start gap-2 py-1 text-sm text-white sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: getPlayerTileColor(game.playerTiles, player.playerId) }}
+                          />
+                          {playerProfileHref
+                            ? (
+                              <Link
+                                to={playerProfileHref}
+                                className="break-words transition hover:text-sky-100"
+                              >
+                                {getPlayerLabel(game.players, player.playerId)}
+                              </Link>
+                              )
+                            : (
+                              <span className="break-words">{getPlayerLabel(game.players, player.playerId)}</span>
+                              )}
+                          {gameResult?.winningPlayerId === player.playerId && (
+                            <span className="rounded-full border border-amber-200/30 bg-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-black">
+                              Winner
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="w-full text-left sm:w-auto sm:text-right">
+                          {player.elo !== null && (
+                            <div className="text-sm font-medium text-white">
+                              {player.elo} ELO
+                            </div>
+                          )}
+                          {player.eloChange !== null && (
+                            <div className={`text-xs ${player.eloChange >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                              {formatEloChange(player.eloChange)}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -488,10 +528,7 @@ function FinishedGameReplayView({
 
             <div className="mt-4 min-h-0 flex-1 space-y-3 xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
               <button
-                onClick={() => {
-                  setIsAutoPlaying(false)
-                  setVisibleMoveCount(0)
-                }}
+                onClick={goToStart}
                 className={`w-full min-w-0 overflow-hidden rounded-[1.5rem] border p-4 text-left transition ${visibleMoveCount === 0
                   ? 'border-sky-300/30 bg-sky-400/12'
                   : 'border-white/10 bg-white/6 hover:bg-white/10'
@@ -528,7 +565,7 @@ function FinishedGameReplayView({
                       {getPlayerLabel(game.players, move.playerId)} placed at ({move.x}, {move.y})
                     </div>
                     <div className="mt-1 break-words text-sm text-slate-300">
-                      {formatDateTime(move.timestamp)} • +{formatElapsed(move.timestamp - game.startedAt)}
+                      {formatDateTimeWithSeconds(move.timestamp)} • +{formatMinutesSeconds(move.timestamp - game.startedAt)}
                     </div>
                   </button>
                 )

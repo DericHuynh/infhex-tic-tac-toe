@@ -1,5 +1,6 @@
 import { useEffect, useState, type MouseEvent } from 'react'
 import type { SessionInfo } from '@ih3t/shared'
+import { formatEloChange } from '../utils/elo'
 
 type FinishedPlayerScreenVariant = 'win' | 'lose'
 type FinishedSessionInfo = Extract<SessionInfo, { state: 'finished' }>
@@ -14,10 +15,6 @@ interface FinishedPlayerScreenProps {
   reviewGameHref?: string
   onReviewGame?: (event: MouseEvent<HTMLAnchorElement>) => void
   onRequestRematch?: () => void
-}
-
-function formatEloChange(eloChange: number) {
-  return `${eloChange >= 0 ? '+' : ''}${eloChange}`
 }
 
 function easeOutCubic(progress: number) {
@@ -89,18 +86,21 @@ function FinishedPlayerScreen({
 }: Readonly<FinishedPlayerScreenProps>) {
   const isWin = variant === 'win'
   const currentPlayer = session.players.find((player) => player.id === currentPlayerId) ?? null
-  const eloSummary = currentPlayer && currentPlayer.elo !== null && currentPlayer.eloChange !== null
+  const eloAdjustment = currentPlayer && currentPlayer.ratingAdjustment ?
+    isWin ? currentPlayer.ratingAdjustment.eloGain : currentPlayer.ratingAdjustment.eloLoss : 0;
+
+  const eloSummary = currentPlayer && currentPlayer.rating !== null && currentPlayer.ratingAdjustment !== null
     ? {
-      currentElo: currentPlayer.elo,
-      previousElo: currentPlayer.elo - currentPlayer.eloChange,
-      eloChange: currentPlayer.eloChange
+      currentElo: currentPlayer.rating.eloScore + eloAdjustment,
+      previousElo: currentPlayer.rating.eloScore,
+      eloChange: eloAdjustment
     }
     : null
   const animatedElo = useAnimatedElo(
     eloSummary?.currentElo ?? null,
     eloSummary?.previousElo ?? null
   )
-  const isRematchAvailable = session.players.length === 2 && session.winningPlayerId !== null
+  const isRematchAvailable = session.players.every(player => player.connection.status === "connected") && session.winningPlayerId !== null
   const isRematchRequestedByCurrentPlayer = session.rematchAcceptedPlayerIds.includes(currentPlayerId)
   const isRematchRequestedByOpponent = session.rematchAcceptedPlayerIds.some(
     (playerId) => playerId !== currentPlayerId

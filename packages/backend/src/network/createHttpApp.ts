@@ -8,8 +8,10 @@ import type { GameTimeControl, SandboxPlayerSlot, SessionParticipant } from '@ih
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
+import { AuthRepository } from '../auth/authRepository';
 import { AuthService } from '../auth/authService';
 import { ServerConfig } from '../config/serverConfig';
+import { EloRepository } from '../elo/eloRepository';
 import { LeaderboardService } from '../leaderboard/leaderboardService';
 import { ROOT_LOGGER } from '../logger';
 import { GameHistoryRepository } from '../persistence/gameHistoryRepository';
@@ -149,9 +151,7 @@ function formatTimeControl(timeControl: GameTimeControl): string {
 function getNormalizedPlayerLabels(players: SessionParticipant[]): string[] {
     return players.map((player) => {
         const normalizedName = player.displayName.trim() || 'A player';
-        return player.elo === null
-            ? normalizedName
-            : `${normalizedName} (${player.elo} ELO)`;
+        return player.rating === null ? normalizedName : `${normalizedName} (${player.rating.eloScore} ELO)`;
     });
 }
 
@@ -205,9 +205,11 @@ export class HttpApplication {
 
     constructor(
         @inject(ROOT_LOGGER) rootLogger: Logger,
+        @inject(AuthRepository) private readonly authRepository: AuthRepository,
         @inject(AuthService) authService: AuthService,
         @inject(ApiRouter) apiRouter: ApiRouter,
         @inject(CorsConfiguration) corsConfiguration: CorsConfiguration,
+        @inject(EloRepository) eloRepository: EloRepository,
         @inject(ServerConfig) serverConfig: ServerConfig,
         @inject(LeaderboardService) leaderboardService: LeaderboardService,
         @inject(SessionManager) private readonly sessionManager: SessionManager,
@@ -217,12 +219,13 @@ export class HttpApplication {
         const app = express();
         const logger = rootLogger.child({ component: 'http-application' });
         const corsOptions = corsConfiguration.options;
-        const frontendDistPath = serverConfig.frontendDistPath;
         this.logger = logger;
-        this.frontendDistPath = frontendDistPath;
+        this.frontendDistPath = `${serverConfig.frontendDistPath}/client`;
         this.frontendSsrRenderer = new FrontendSsrRenderer({
+            authRepository: this.authRepository,
             authService,
-            frontendDistPath,
+            eloRepository,
+            ssrDistPath: `${serverConfig.frontendDistPath}/ssr`,
             gameHistoryRepository: this.gameHistoryRepository,
             leaderboardService,
             sandboxPositionService: this.sandboxPositionService,
@@ -281,8 +284,8 @@ export class HttpApplication {
             });
         });
 
-        if (process.env.NODE_ENV === 'production' && existsSync(frontendDistPath)) {
-            app.use(express.static(frontendDistPath, { index: false }));
+        if (process.env.NODE_ENV === 'production' && existsSync(this.frontendDistPath)) {
+            app.use(express.static(this.frontendDistPath, { index: false }));
             app.get(/^(?!\/api(?:\/|$)|\/socket\.io(?:\/|$)).*/, async (req, res) => {
                 const archiveRedirectUrl = this.resolveArchiveRedirectUrl(req);
                 if (archiveRedirectUrl) {
@@ -411,6 +414,37 @@ export class HttpApplication {
                 title: `My Match History • ${DEFAULT_PAGE_TITLE}`,
                 description: 'Review your own finished Infinity Hexagonal Tic-Tac-Toe matches while signed in.',
                 robots: 'noindex, nofollow'
+            };
+        }
+
+        if (req.path === '/account/profile') {
+            return {
+                ...defaultMetadata,
+                title: `My Profile • ${DEFAULT_PAGE_TITLE}`,
+                description: 'Sign in to open your own Infinity Hexagonal Tic-Tac-Toe profile.',
+                robots: 'noindex, nofollow'
+            };
+        }
+
+        const publicProfileMatch = req.path.match(/^\/profile\/([^/]+)$/);
+        if (publicProfileMatch) {
+            const profileId = decodeURIComponent(publicProfileMatch[1]);
+            const profile = await this.authRepository.getUserProfileById(profileId);
+            if (!profile) {
+                return {
+                    ...defaultMetadata,
+                    title: `Profile Not Found • ${DEFAULT_PAGE_TITLE}`,
+                    description: 'The requested player profile could not be found.',
+                    ogType: 'article',
+                    robots: 'noindex, nofollow'
+                };
+            }
+
+            return {
+                ...defaultMetadata,
+                title: `${profile.username} • Player Profile • ${DEFAULT_PAGE_TITLE}`,
+                description: `View ${profile.username}'s public Infinity Hexagonal Tic-Tac-Toe profile and competitive standing.`,
+                ogType: 'article'
             };
         }
 

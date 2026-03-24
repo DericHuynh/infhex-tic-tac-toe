@@ -1,7 +1,33 @@
-import type { AccountProfile, AccountStatistics } from '@ih3t/shared'
+import type { AccountEloHistory, AccountStatistics, PublicAccountProfile } from '@ih3t/shared'
+import { type ReactNode, useState } from 'react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
 import { toast } from 'react-toastify'
-import { signInWithDiscord } from '../authClient'
+import { signInWithDiscord } from '../query/authClient'
+import { getInitialRenderTimestamp } from '../ssrState'
+import {
+  formatCalendarDate,
+  formatChartDateTime,
+  formatDateTime,
+  formatRelativeTimeFrom
+} from '../utils/dateTime'
+import { formatDetailedDuration } from '../utils/duration'
+import {
+  formatWinSummary,
+  formatWorldRank
+} from '../utils/profileStats'
 import PageCorpus from './PageCorpus'
+import React from 'react'
+
+const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000
+const defaultPlayerElo = 1000
 
 function showErrorToast(message: string) {
   toast.error(message, {
@@ -9,26 +35,14 @@ function showErrorToast(message: string) {
   })
 }
 
-function formatWorldRank(worldRank: number | null) {
-  return worldRank === null ? '--' : `#${worldRank}`
-}
-
-function formatWinSummary(won: number, played: number) {
-  if (played <= 0) {
-    return 'No finished games yet.'
-  }
-
-  const winRate = Math.round((won / played) * 100)
-  return `${won} won · ${winRate}% win rate`
-}
-
 interface ProfileScreenProps {
-  account: AccountProfile | null
+  account: PublicAccountProfile | null
   statistics: AccountStatistics | null
   isLoading: boolean
   isStatisticsLoading: boolean
   errorMessage: string | null
   statisticsErrorMessage: string | null
+  isPublicView: boolean
 }
 
 interface PrimaryStatCardProps {
@@ -58,7 +72,7 @@ interface SecondaryStatCardProps {
 
 function SecondaryStatCard({ label, value, detail }: Readonly<SecondaryStatCardProps>) {
   return (
-    <div className="rounded-[1.25rem] border border-white/10 bg-slate-950/45 p-4">
+    <div className="rounded-[1.25rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
       <div className="text-xs uppercase tracking-[0.22em] text-slate-400">{label}</div>
       <div className="mt-2 text-2xl font-black uppercase tracking-[0.05em] text-white">{value}</div>
       <div className="mt-2 text-sm text-slate-300">{detail}</div>
@@ -66,11 +80,54 @@ function SecondaryStatCard({ label, value, detail }: Readonly<SecondaryStatCardP
   )
 }
 
-function StatisticsLoadingState() {
+interface AccountMetaItemProps {
+  label: string
+  value: string
+}
+
+function AccountMetaItem({ label, value }: Readonly<AccountMetaItemProps>) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</span>
+      <span className="text-sm text-slate-200">{value}</span>
+    </div>
+  )
+}
+
+interface StatisticsGroupProps {
+  eyebrow: string
+  title: string
+  description: string
+  accentClassName: string
+  cardGridClassName: string
+  children: ReactNode
+}
+
+function StatisticsGroup({
+  eyebrow,
+  title,
+  description,
+  accentClassName,
+  cardGridClassName,
+  children
+}: Readonly<StatisticsGroupProps>) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.5))] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+      <div className={`text-xs uppercase tracking-[0.28em] ${accentClassName}`}>{eyebrow}</div>
+      <h3 className="mt-3 text-xl font-black uppercase tracking-[0.08em] text-white">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
+      <div className={`mt-5 grid gap-4 ${cardGridClassName}`}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
+function StatisticsLoadingState({ message = 'Loading your statistics...' }: Readonly<{ message?: string }>) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 px-5 py-10 text-center text-sm text-slate-300 lg:col-span-2">
-        Loading your statistics...
+        {message}
       </div>
     </div>
   )
@@ -84,11 +141,167 @@ function StatisticsErrorState({ message }: Readonly<{ message: string }>) {
   )
 }
 
-function StatisticsEmptyState() {
+function StatisticsEmptyState({ message = 'Statistics will appear here once your profile data is ready.' }: Readonly<{ message?: string }>) {
   return (
     <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 px-5 py-10 text-center text-sm text-slate-300">
-      Statistics will appear here once your profile data is ready.
+      {message}
     </div>
+  )
+}
+
+function EloHistoryChartSection({
+  eloHistory,
+  currentElo,
+  referenceTimestamp
+}: Readonly<{
+  eloHistory: AccountEloHistory
+  currentElo: number
+  referenceTimestamp: number
+}>) {
+  type EloChartPoint = {
+    timestamp: number
+    elo: number
+  }
+
+  const windowStart = referenceTimestamp - thirtyDaysMs
+  const bucketSizeMs = Math.max(1, eloHistory.bucketSizeMs)
+  const sortedPoints = [...eloHistory.points]
+    .filter((point) => point.timestamp <= referenceTimestamp)
+    .sort((left, right) => left.timestamp - right.timestamp)
+  const pointByTimestamp = new Map(sortedPoints.map((point) => [point.timestamp, point] as const))
+  const lastPointBeforeWindow = sortedPoints.reduce<AccountStatistics['eloHistory']['points'][number] | null>((latestPoint, point) => {
+    if (point.timestamp > windowStart) {
+      return latestPoint
+    }
+
+    if (!latestPoint || point.timestamp > latestPoint.timestamp) {
+      return point
+    }
+
+    return latestPoint
+  }, null)
+  const startPoint = {
+    timestamp: windowStart,
+    elo: lastPointBeforeWindow?.elo ?? defaultPlayerElo
+  } satisfies EloChartPoint
+  const chartPoints: EloChartPoint[] = [startPoint]
+  let currentBucketElo = startPoint.elo
+  let nextTimestamp = Math.floor(windowStart / bucketSizeMs) * bucketSizeMs
+
+  if (nextTimestamp <= windowStart) {
+    nextTimestamp += bucketSizeMs
+  }
+
+  while (nextTimestamp < referenceTimestamp) {
+    const exactPoint = pointByTimestamp.get(nextTimestamp)
+    if (exactPoint) {
+      currentBucketElo = exactPoint.elo
+    }
+
+    chartPoints.push({
+      timestamp: nextTimestamp,
+      elo: exactPoint?.elo ?? currentBucketElo
+    })
+
+    if (exactPoint) {
+      currentBucketElo = exactPoint.elo
+    }
+
+    nextTimestamp += bucketSizeMs
+  }
+
+  chartPoints.push({
+    timestamp: referenceTimestamp,
+    elo: currentElo
+  })
+
+  const highestPoint = chartPoints.reduce((currentHighest, point) => {
+    if (point.elo > currentHighest.elo) {
+      return point
+    }
+
+    if (point.elo === currentHighest.elo && point.timestamp > currentHighest.timestamp) {
+      return point
+    }
+
+    return currentHighest
+  }, chartPoints[0])
+  const [lowestElo, highestElo] = chartPoints.reduce<[number, number]>((range, point) => {
+    return [
+      Math.min(range[0], point.elo),
+      Math.max(range[1], point.elo)
+    ]
+  }, [chartPoints[0].elo, chartPoints[0].elo])
+  const yAxisPadding = Math.max(10, Math.ceil((highestElo - lowestElo) * 0.12))
+  const yAxisDomain: [number, number] = [
+    Math.max(0, lowestElo - yAxisPadding),
+    highestElo + yAxisPadding
+  ]
+
+  return (
+    <React.Fragment>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-[0.28em] text-sky-200/85">Competitive Trend</div>
+          <h3 className="mt-3 text-xl font-black uppercase tracking-[0.08em] text-white">ELO Rating</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            ELO rating over the last 30 days.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+          <div className="text-[0.62rem] uppercase tracking-[0.24em] text-slate-500">Highest Rating</div>
+          <div className="mt-1 text-lg font-bold leading-none text-white">{highestPoint.elo}</div>
+          <div className="mt-1 text-xs text-slate-400">
+            Reached {formatDateTime(highestPoint.timestamp)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 h-72 rounded-[1.25rem] border border-white/8 bg-slate-950/45 p-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartPoints} margin={{ top: 12, right: 12, bottom: 12, left: 0 }}>
+            <CartesianGrid stroke="rgba(148,163,184,0.16)" vertical={false} />
+            <XAxis
+              dataKey="timestamp"
+              minTickGap={28}
+              stroke="#94a3b8"
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={formatChartDateTime}
+            />
+            <YAxis
+              allowDecimals={false}
+              domain={yAxisDomain}
+              stroke="#94a3b8"
+              tickLine={false}
+              axisLine={false}
+              width={48}
+            />
+            <Tooltip
+              cursor={{ stroke: 'rgba(125,211,252,0.35)', strokeWidth: 1 }}
+              contentStyle={{
+                backgroundColor: 'rgba(2,6,23,0.94)',
+                border: '1px solid rgba(148,163,184,0.2)',
+                borderRadius: '1rem',
+                color: '#e2e8f0'
+              }}
+              formatter={(value) => [`${value} ELO`, 'Rating']}
+              labelFormatter={(label) => formatDateTime(Number(label))}
+            />
+            <Line
+              type="monotone"
+              dataKey="elo"
+              stroke="#7dd3fc"
+              strokeWidth={3}
+              dot={chartPoints.length === 1}
+              activeDot={{ r: 5, fill: '#7dd3fc' }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </React.Fragment>
   )
 }
 
@@ -98,8 +311,11 @@ function ProfileScreen({
   isLoading,
   isStatisticsLoading,
   errorMessage,
-  statisticsErrorMessage
+  statisticsErrorMessage,
+  isPublicView
 }: Readonly<ProfileScreenProps>) {
+  const [referenceTimestamp] = useState(() => getInitialRenderTimestamp())
+
   const handleSignIn = async () => {
     try {
       await signInWithDiscord()
@@ -109,43 +325,71 @@ function ProfileScreen({
     }
   }
 
+  const isMissingPublicProfile = isPublicView && errorMessage === 'Profile not found.'
+  const memberSinceLabel = account ? formatCalendarDate(account.registeredAt) : null
+  const lastSeenLabel = account ? formatRelativeTimeFrom(account.lastActiveAt, referenceTimestamp) : null
+
   return (
     <PageCorpus
-      category="Profile"
-      title="Your Account"
-      description="Account details and competitive standing for your Infinity Hexagonal Tic-Tac-Toe profile."
+      category={isPublicView ? 'Profile' : 'Account'}
+      title={isPublicView ? (account?.username ?? 'Player Profile') : 'Your Account'}
+      description={isPublicView
+        ? 'Public profile details and competitive standing for this Infinity Hexagonal Tic-Tac-Toe player.'
+        : 'Account details and competitive standing for your Infinity Hexagonal Tic-Tac-Toe profile.'}
     >
       <div className="min-h-0 flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
         {isLoading ? (
           <div className="flex h-full items-center justify-center rounded-[1.75rem] border border-white/10 bg-white/6 px-6 py-10 text-center text-slate-300">
-            Loading your account...
+            {isPublicView ? 'Loading profile...' : 'Loading your account...'}
+          </div>
+        ) : isMissingPublicProfile ? (
+          <div className="flex h-full items-center justify-center">
+            <section className="w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-white/6 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.35)] sm:p-8">
+              <div className="text-xs uppercase tracking-[0.3em] text-sky-100/90">Profile</div>
+              <h2 className="mt-4 text-3xl font-black uppercase tracking-[0.08em] text-white">Profile Not Found</h2>
+              <p className="mt-4 text-sm leading-6 text-slate-300 sm:text-base">
+                This player profile is unavailable or no longer exists.
+              </p>
+            </section>
           </div>
         ) : errorMessage ? (
           <div className="rounded-[1.5rem] border border-rose-300/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">
             {errorMessage}
           </div>
         ) : !account ? (
-          <div className="flex h-full items-center justify-center">
-            <section className="w-full max-w-2xl rounded-[1.75rem] border border-amber-300/20 bg-amber-300/10 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.35)] sm:p-8">
-              <div className="text-xs uppercase tracking-[0.3em] text-amber-100/90">Profile Access</div>
-              <h2 className="mt-4 text-3xl font-black uppercase tracking-[0.08em] text-white">Sign In Required</h2>
-              <p className="mt-4 text-sm leading-6 text-amber-50/85 sm:text-base">
-                Sign in with Discord to view your account details and competitive standing.
-              </p>
-              <button
-                onClick={() => void handleSignIn()}
-                className="mt-6 rounded-full bg-[#5865F2] px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:-translate-y-0.5 hover:bg-[#6f7cff]"
-              >
-                Sign In With Discord
-              </button>
-            </section>
-          </div>
+          isPublicView ? (
+            <div className="flex h-full items-center justify-center">
+              <section className="w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-white/6 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.35)] sm:p-8">
+                <div className="text-xs uppercase tracking-[0.3em] text-sky-100/90">Profile</div>
+                <h2 className="mt-4 text-3xl font-black uppercase tracking-[0.08em] text-white">Profile Not Found</h2>
+                <p className="mt-4 text-sm leading-6 text-slate-300 sm:text-base">
+                  This player profile is unavailable or no longer exists.
+                </p>
+              </section>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <section className="w-full max-w-2xl rounded-[1.75rem] border border-amber-300/20 bg-amber-300/10 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.35)] sm:p-8">
+                <div className="text-xs uppercase tracking-[0.3em] text-amber-100/90">Profile Access</div>
+                <h2 className="mt-4 text-3xl font-black uppercase tracking-[0.08em] text-white">Sign In Required</h2>
+                <p className="mt-4 text-sm leading-6 text-amber-50/85 sm:text-base">
+                  Sign in with Discord to view your account details and competitive standing.
+                </p>
+                <button
+                  onClick={() => void handleSignIn()}
+                  className="mt-6 rounded-full bg-[#5865F2] px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:-translate-y-0.5 hover:bg-[#6f7cff]"
+                >
+                  Sign In With Discord
+                </button>
+              </section>
+            </div>
+          )
         ) : (
           <div className="space-y-6">
-            <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.16),transparent_30%),rgba(255,255,255,0.06)] p-6 shadow-[0_24px_100px_rgba(15,23,42,0.4)] sm:p-8">
+            <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.12),transparent_30%),rgba(255,255,255,0.05)] p-6 shadow-[0_24px_100px_rgba(15,23,42,0.34)] sm:p-8">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-200/50 to-transparent" />
-              <div className="grid gap-6 xl:grid-cols-[1.05fr,0.95fr]">
-                <div className="min-w-0">
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,1.15fr),minmax(22rem,0.85fr)] xl:items-end">
+                <div className="min-w-0 flex items-center my-auto">
                   <div className="flex min-w-0 items-start gap-4">
                     {account.image ? (
                       <img
@@ -173,16 +417,17 @@ function ProfileScreen({
                         {account.username}
                       </h2>
 
-                      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                        Your profile combines identity, match performance, and current ranking in one place, with competitive status leading the page.
-                      </p>
+                      <div className="mt-4 flex flex-col text-slate-300">
+                        <AccountMetaItem label="Member Since" value={memberSinceLabel ?? 'Unavailable'} />
+                        <AccountMetaItem label="Last Seen" value={lastSeenLabel ?? 'Unavailable'} />
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div>
                   {isStatisticsLoading ? (
-                    <StatisticsLoadingState />
+                    <StatisticsLoadingState message={isPublicView ? 'Loading profile statistics...' : 'Loading your statistics...'} />
                   ) : statisticsErrorMessage ? (
                     <StatisticsErrorState message={statisticsErrorMessage} />
                   ) : statistics ? (
@@ -201,45 +446,90 @@ function ProfileScreen({
                       />
                     </div>
                   ) : (
-                    <StatisticsEmptyState />
+                    <StatisticsEmptyState message={isPublicView
+                      ? 'Statistics will appear here once this profile has competitive data ready.'
+                      : 'Statistics will appear here once your profile data is ready.'} />
                   )}
                 </div>
               </div>
             </section>
 
-            <section className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.35)]">
-              <div className="text-xs uppercase tracking-[0.3em] text-sky-200/80">Match Performance</div>
-              <h2 className="mt-3 text-2xl font-black uppercase tracking-[0.08em] text-white">Game Statistics</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                A focused breakdown of finished-game performance across all games and ranked play.
-              </p>
-
+            <section className="">
               {isStatisticsLoading ? (
                 <div className="mt-6 rounded-[1.25rem] border border-white/10 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-300">
-                  Loading your statistics...
+                  {isPublicView ? 'Loading profile statistics...' : 'Loading your statistics...'}
                 </div>
               ) : statisticsErrorMessage ? (
                 <div className="mt-6 rounded-[1.25rem] border border-rose-300/30 bg-rose-500/10 px-4 py-4 text-sm text-rose-100">
                   {statisticsErrorMessage}
                 </div>
               ) : statistics ? (
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <SecondaryStatCard
-                    label="Total Games"
-                    value={statistics.totalGames.played}
-                    detail={formatWinSummary(statistics.totalGames.won, statistics.totalGames.played)}
-                  />
-                  <SecondaryStatCard
-                    label="Ranked Games"
-                    value={statistics.rankedGames.played}
-                    detail={formatWinSummary(statistics.rankedGames.won, statistics.rankedGames.played)}
-                  />
-                  <SecondaryStatCard
-                    label="Total Moves"
-                    value={statistics.totalMovesMade}
-                    detail="Moves recorded in your finished matches."
-                  />
-                </div>
+                <>
+                  <section className="mt-6 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.5))] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+                    <EloHistoryChartSection
+                      eloHistory={statistics.eloHistory}
+                      currentElo={statistics.elo}
+                      referenceTimestamp={referenceTimestamp}
+                    />
+                    <div className={"mt-6 grid grid-cols-1 gap-6 md:grid-cols-3"}>
+                      <SecondaryStatCard
+                        label="Ranked Games"
+                        value={statistics.rankedGames.played}
+                        detail={formatWinSummary(statistics.rankedGames.won, statistics.rankedGames.played)}
+                      />
+                      <SecondaryStatCard
+                        label="Current Win Streak"
+                        value={statistics.rankedGames.currentWinStreak}
+                        detail={"Current number of unbeaten rated games"}
+                      />
+                      <SecondaryStatCard
+                        label="Longest Win Streak"
+                        value={statistics.rankedGames.longestWinStreak}
+                        detail={"Longest streak of unbeaten rated games"}
+                      />
+                    </div>
+                  </section>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr,1.2fr,0.95fr]">
+                    <StatisticsGroup
+                      eyebrow="Overview"
+                      title="Overall Games"
+                      description="All finished games, regardless of queue type, along with the volume of moves you've logged."
+                      accentClassName="text-sky-200/85"
+                      cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
+                    >
+                      <SecondaryStatCard
+                        label="Total Games"
+                        value={statistics.totalGames.played}
+                        detail={formatWinSummary(statistics.totalGames.won, statistics.totalGames.played)}
+                      />
+                      <SecondaryStatCard
+                        label="Total Moves"
+                        value={statistics.totalMovesMade}
+                        detail="Moves recorded across all of your finished matches."
+                      />
+                    </StatisticsGroup>
+
+                    <StatisticsGroup
+                      eyebrow="Records"
+                      title="Personal Highlights"
+                      description="Personal highlights like longest match measured by time or move count."
+                      accentClassName="text-emerald-200/85"
+                      cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
+                    >
+                      <SecondaryStatCard
+                        label="Longest Game"
+                        value={formatDetailedDuration(statistics.longestGamePlayedMs)}
+                        detail="Your longest finished game by duration."
+                      />
+                      <SecondaryStatCard
+                        label="Longest By Moves"
+                        value={statistics.longestGameByMoves}
+                        detail="Your longest finished game by move count."
+                      />
+                    </StatisticsGroup>
+                  </div>
+                </>
               ) : (
                 <div className="mt-6 rounded-[1.25rem] border border-white/10 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-300">
                   Statistics will appear here once your profile data is ready.

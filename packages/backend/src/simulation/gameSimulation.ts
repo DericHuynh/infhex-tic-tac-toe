@@ -15,7 +15,6 @@ interface ApplyMoveParams {
 
 interface ApplyMoveResult {
     turnCompleted: boolean;
-    winningPlayerId: string | null;
 }
 
 export class SimulationError extends GameRuleError {

@@ -40,7 +40,7 @@ export class CorsConfiguration {
 
                 callback(new Error(`Origin ${origin} is not allowed by CORS`));
             },
-            methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
+            methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS', 'DELETE'],
             allowedHeaders: ['Content-Type', 'X-Device-Id'],
             credentials: true
         };

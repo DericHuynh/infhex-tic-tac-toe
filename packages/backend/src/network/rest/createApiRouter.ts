@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
     type AccountPreferencesResponse,
     type AccountResponse,
+    type PublicAccountResponse,
     type AccountStatisticsResponse,
     type AdminServerSettingsResponse,
     type AdminStatsResponse,
@@ -27,6 +28,7 @@ import {
     zUpdateAccountProfileRequest,
 } from '@ih3t/shared';
 import { ServerSettingsService } from '../../admin/serverSettingsService';
+import { ServerShutdownService } from '../../admin/serverShutdownService';
 import { AdminStatsService } from '../../admin/adminStatsService';
 import { AuthRepository, type AccountUserProfile } from '../../auth/authRepository';
 import { AuthService } from '../../auth/authService';
@@ -84,6 +86,7 @@ export class ApiRouter {
         @inject(AuthRepository) private readonly authRepository: AuthRepository,
         @inject(EloRepository) private readonly eloRepository: EloRepository,
         @inject(ServerSettingsService) private readonly serverSettingsService: ServerSettingsService,
+        @inject(ServerShutdownService) private readonly serverShutdownService: ServerShutdownService,
         @inject(AdminStatsService) private readonly adminStatsService: AdminStatsService,
         @inject(LeaderboardService) private readonly leaderboardService: LeaderboardService,
         @inject(SocketServerGateway) private readonly socketServerGateway: SocketServerGateway,
@@ -94,26 +97,52 @@ export class ApiRouter {
         const router = express.Router();
 
         router.get('/account', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             const response: AccountResponse = { user };
             res.json(response);
         });
 
         router.get('/account/statistics', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to view your statistics.' });
                 return;
             }
 
             const response: AccountStatisticsResponse = {
-                statistics: await this.buildAccountStatistics(user)
+                statistics: await this.buildAccountStatistics(user.id)
+            };
+            res.json(response);
+        });
+
+        router.get('/profiles/:profileId', async (req, res) => {
+            const user = await this.authRepository.getUserProfileById(req.params.profileId);
+            if (!user) {
+                res.status(404).json({ error: 'Profile not found.' });
+                return;
+            }
+
+            const response: PublicAccountResponse = {
+                user: this.toPublicAccountProfile(user)
+            };
+            res.json(response);
+        });
+
+        router.get('/profiles/:profileId/statistics', async (req, res) => {
+            const user = await this.authRepository.getUserProfileById(req.params.profileId);
+            if (!user) {
+                res.status(404).json({ error: 'Profile not found.' });
+                return;
+            }
+
+            const response: AccountStatisticsResponse = {
+                statistics: await this.buildAccountStatistics(user.id)
             };
             res.json(response);
         });
 
         router.get('/account/preferences', async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to view your account preferences.' });
                 return;
@@ -130,7 +159,7 @@ export class ApiRouter {
         });
 
         router.patch('/account', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to update your account.' });
                 return;
@@ -159,7 +188,7 @@ export class ApiRouter {
         });
 
         router.patch('/account/preferences', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to update your account preferences.' });
                 return;
@@ -183,14 +212,19 @@ export class ApiRouter {
         });
 
         router.get('/finished-games', async (req, res) => {
+            const currentUser = await this.authService.getUserFromRequest(req);
             const query = zFinishedGamesQuery.parse(req.query);
             const view = query.view ?? 'all';
-            const currentUser = view === 'mine'
-                ? await this.authService.getCurrentUser(req)
-                : null;
 
             if (view === 'mine' && !currentUser) {
                 res.status(401).json({ error: 'Sign in to view your own match history.' });
+                return;
+            }
+
+            const page = query.page ?? 1;
+            const pageSize = query.pageSize ?? 20;
+            if (view !== "mine" && page * pageSize >= 500 && currentUser?.role !== "admin") {
+                res.status(401).json({ error: 'Match history limited to 500 games' });
                 return;
             }
 
@@ -214,13 +248,13 @@ export class ApiRouter {
         });
 
         router.get('/leaderboard', async (req, res) => {
-            const currentUser = await this.authService.getCurrentUser(req);
+            const currentUser = await this.authService.getUserFromRequest(req);
             const response: Leaderboard = await this.leaderboardService.getLeaderboardSnapshot(currentUser?.id ?? null);
             res.json(response);
         });
 
         router.post('/sandbox-positions', express.json(), async (req, res) => {
-            const user = await this.authService.getCurrentUser(req);
+            const user = await this.authService.getUserFromRequest(req);
             if (!user) {
                 res.status(401).json({ error: 'Sign in with Discord to share sandbox positions.' });
                 return;
@@ -289,7 +323,7 @@ export class ApiRouter {
             }
 
             const request = zAdminScheduleShutdownRequest.parse(req.body ?? {});
-            const shutdown = this.sessionManager.scheduleShutdown(request.delayMinutes * 60 * 1000);
+            const shutdown = this.serverShutdownService.requestShutdown(request.delayMinutes * 60 * 1000);
             const response: AdminShutdownControlResponse = { shutdown };
             res.json(response);
         });
@@ -300,9 +334,9 @@ export class ApiRouter {
                 return;
             }
 
-            this.sessionManager.cancelShutdown();
+            this.serverShutdownService.cancelShutdown();
             const response: AdminShutdownControlResponse = {
-                shutdown: this.sessionManager.getShutdownState()
+                shutdown: this.serverShutdownService.getShutdownState()
             };
             res.json(response);
         });
@@ -349,7 +383,7 @@ export class ApiRouter {
             try {
                 const lobbyOptions = this.parseLobbyOptions(req.body);
                 const currentUser = lobbyOptions.rated
-                    ? await this.authService.getCurrentUser(req)
+                    ? await this.authService.getUserFromRequest(req)
                     : null;
 
                 if (lobbyOptions.rated && !currentUser) {
@@ -402,11 +436,12 @@ export class ApiRouter {
         return zAdminUpdateServerSettingsRequest.parse(body ?? {}).settings;
     }
 
-    private async buildAccountStatistics(user: AccountUserProfile): Promise<AccountStatisticsResponse['statistics']> {
-        const [gameStats, playerRating, leaderboardPlacement] = await Promise.all([
-            this.gameHistoryRepository.getPlayerProfileStatistics(user.id),
-            this.eloRepository.getPlayerRating(user.id),
-            this.eloRepository.getLeaderboardPlacement(user.id)
+    private async buildAccountStatistics(profileId: string): Promise<AccountStatisticsResponse['statistics']> {
+        const [gameStats, eloHistory, playerRating, leaderboardPlacement] = await Promise.all([
+            this.gameHistoryRepository.getPlayerProfileStatistics(profileId),
+            this.gameHistoryRepository.getPlayerEloHistory(profileId),
+            this.eloRepository.getPlayerRating(profileId),
+            this.eloRepository.getLeaderboardPlacement(profileId)
         ]);
 
         return {
@@ -416,12 +451,22 @@ export class ApiRouter {
             },
             rankedGames: {
                 played: gameStats.rankedGamesPlayed,
-                won: gameStats.rankedGamesWon
+                won: gameStats.rankedGamesWon,
+                currentWinStreak: gameStats.currentRankedWinStreak,
+                longestWinStreak: gameStats.longestRankedWinStreak
             },
+            longestGamePlayedMs: gameStats.longestGamePlayedMs,
+            longestGameByMoves: gameStats.longestGameByMoves,
             totalMovesMade: gameStats.totalMovesMade,
-            elo: leaderboardPlacement?.elo ?? playerRating?.elo ?? 1000,
+            eloHistory,
+            elo: leaderboardPlacement?.eloScore ?? playerRating?.eloScore ?? 1000,
             worldRank: leaderboardPlacement?.rank ?? null
         };
+    }
+
+    private toPublicAccountProfile(user: AccountUserProfile): PublicAccountResponse['user'] {
+        const { email: _email, ...publicProfile } = user;
+        return publicProfile;
     }
 
     private buildAdminServerSettingsResponse(): AdminServerSettingsResponse {
@@ -432,7 +477,7 @@ export class ApiRouter {
     }
 
     private async requireAdminUser(req: express.Request, res: express.Response): Promise<AccountUserProfile | null> {
-        const user = await this.authService.getCurrentUser(req);
+        const user = await this.authService.getUserFromRequest(req);
         if (!user) {
             res.status(401).json({ error: 'Sign in as an admin to view this page.' });
             return null;

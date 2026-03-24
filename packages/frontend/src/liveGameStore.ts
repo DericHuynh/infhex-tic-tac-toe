@@ -59,6 +59,7 @@ function cloneSessionInfo(session: SessionInfo): SessionInfo {
     ...session,
     players: session.players.map(player => ({ ...player })),
     spectators: session.spectators.map(spectator => ({ ...spectator })),
+    chatMessages: session.chatMessages.map(chatMessage => ({ ...chatMessage })),
     gameOptions: {
       ...session.gameOptions,
       timeControl: { ...session.gameOptions.timeControl }

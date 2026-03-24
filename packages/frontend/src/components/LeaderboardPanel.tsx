@@ -1,31 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { Leaderboard, LeaderboardPlacement, LeaderboardPlayer } from '@ih3t/shared'
-import { useQueryAccount } from '../queryHooks'
+import { Link } from 'react-router'
+import { useQueryAccount } from '../query/accountClient'
 import { getInitialRenderTimestamp } from '../ssrState'
-
-export function formatDateTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(timestamp)
-}
-
-function formatCountdown(remainingMs: number) {
-  if (remainingMs <= 0) {
-    return 'Refreshing now'
-  }
-
-  const totalSeconds = Math.ceil(remainingMs / 1000)
-  const hours = Math.floor(totalSeconds / 3_600)
-  const minutes = Math.floor((totalSeconds % 3_600) / 60)
-  const seconds = totalSeconds % 60
-
-  if (hours > 0) {
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`
-  }
-
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
+import { formatDateTime } from '../utils/dateTime'
+import { formatRefreshCountdown } from '../utils/duration'
 
 function LeaderboardAvatar({ player }: Readonly<{ player: LeaderboardPlayer }>) {
   if (player.image) {
@@ -43,6 +22,10 @@ function LeaderboardAvatar({ player }: Readonly<{ player: LeaderboardPlayer }>) 
       {player.displayName.slice(0, 2).toUpperCase()}
     </div>
   )
+}
+
+function getProfileHref(profileId: string) {
+  return `/profile/${encodeURIComponent(profileId)}`
 }
 
 function LeaderboardMetric({
@@ -93,7 +76,12 @@ function PersonalLeaderboardCard({
     return (
       <div className="mt-5 rounded-[1.35rem] border border-sky-300/20 bg-sky-400/10 px-4 py-4 text-sm shadow-[0_16px_60px_rgba(14,165,233,0.12)]">
         <div className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-sky-200">Your Place</div>
-        <div className="mt-2 text-base font-bold text-white">{queryAccount.data.user.username}</div>
+        <Link
+          to={getProfileHref(queryAccount.data.user.id)}
+          className="mt-2 inline-flex text-base font-bold text-white transition hover:text-sky-100"
+        >
+          {queryAccount.data.user.username}
+        </Link>
         <div className="mt-1 text-slate-300">
           You are not ranked yet. Finish a rated game to claim a leaderboard spot.
         </div>
@@ -141,13 +129,15 @@ function LeaderboardCard({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <LeaderboardAvatar player={player} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold text-white sm:text-base">{player.displayName}</div>
-            {/* <div className="truncate text-[0.68rem] uppercase tracking-[0.16em] text-slate-500 sm:hidden">
-                        {player.profileId}
-                      </div> */}
-          </div>
+          <Link
+            to={getProfileHref(player.profileId)}
+            className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-xl transition hover:text-sky-100"
+          >
+            <LeaderboardAvatar player={player} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-white transition group-hover:text-sky-100 sm:text-base">{player.displayName}</div>
+            </div>
+          </Link>
         </div>
 
         <div className="col-start-2 justify-end sm:col-span-1 flex-row-reverse sm:flex-row items-center flex w-full gap-x-4 gap-y-1.5 pt-0.5 text-left sm:w-auto sm:flex-nowrap sm:gap-x-5 sm:pt-0">
@@ -254,7 +244,7 @@ export function LeaderboardRefreshIndicator({
           Leaderboard Refresh
         </div>
         <div className="text-sm font-bold text-white">
-          {isRefreshing ? 'Updating...' : formatCountdown(remainingMs)}
+          {isRefreshing ? 'Updating...' : formatRefreshCountdown(remainingMs)}
         </div>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">

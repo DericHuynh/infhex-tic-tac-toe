@@ -50,6 +50,7 @@ export function createAppRoutes() {
           <Route path="/account/preferences" element={<AccountPreferencesRoute />} />
           <Route path="/account/games" element={<FinishedGamesRoute />} />
           <Route path="/account/games/:gameId" element={<FinishedGameRoute />} />
+          <Route path="/profile/:profileId" element={<ProfileRoute />} />
           <Route path="/leaderboard" element={<LeaderboardRoute />} />
           <Route path="/admin" element={<AdminControlsRoute />} />
           <Route path="/admin/stats" element={<AdminRoute />} />

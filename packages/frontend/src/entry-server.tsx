@@ -1,8 +1,8 @@
 import type { DehydratedState } from '@tanstack/react-query'
 import { renderToString } from 'react-dom/server'
-import AppProviders from './AppProviders'
-import { createQueryClient } from './queryClient'
+import { createQueryClient } from './query/queryClient'
 import { createServerRouter } from './router'
+import App from './App'
 
 interface RenderAppOptions {
   url: string
@@ -14,7 +14,7 @@ export function renderApp({ url, dehydratedState }: Readonly<RenderAppOptions>) 
   const router = createServerRouter(url)
 
   return renderToString(
-    <AppProviders
+    <App
       router={router}
       queryClient={queryClient}
       dehydratedState={dehydratedState}

@@ -3,10 +3,10 @@ import type { Socket } from 'socket.io';
 import { zSocketIOClientAuthPayload, type ClientToServerEvents, type ServerToClientEvents } from '@ih3t/shared';
 
 export interface RequestClientInfo {
-    deviceId: string | null;
-    ip: string | null;
-    userAgent: string | null;
-    origin: string | null;
+    deviceId: string;
+    ip: string;
+    userAgent: string;
+    origin: string;
     referer: string | null;
 }
 
@@ -47,13 +47,13 @@ export function getCookieValue(cookieHeader: string | null | undefined, cookieNa
 }
 
 export function getRequestClientInfo(request: Request): RequestClientInfo {
-    const deviceId = request.get('x-device-id') ?? getCookieValue(request.get('cookie'), 'ih3t_device_id');
+    const deviceId = request.get('x-device-id') ?? getCookieValue(request.get('cookie'), 'ih3t_device_id') ?? '';
 
     return {
         deviceId,
-        ip: request.ip ?? null,
-        userAgent: request.get('user-agent') ?? null,
-        origin: request.get('origin') ?? null,
+        ip: request.ip ?? '',
+        userAgent: request.get('user-agent') ?? '',
+        origin: request.get('origin') ?? '',
         referer: request.get('referer') ?? null
     };
 }
@@ -66,10 +66,10 @@ export function getSocketClientInfo(socket: Socket<ClientToServerEvents, ServerT
         versionHash,
 
         socketId: socket.id,
-        ip: socket.handshake.address ?? null,
+        ip: socket.handshake.address ?? '',
 
-        userAgent: getHeaderValue(socket.handshake.headers['user-agent']),
-        origin: getHeaderValue(socket.handshake.headers.origin),
+        userAgent: getHeaderValue(socket.handshake.headers['user-agent']) ?? '',
+        origin: getHeaderValue(socket.handshake.headers.origin) ?? '',
         referer: getHeaderValue(socket.handshake.headers.referer)
     };
 }

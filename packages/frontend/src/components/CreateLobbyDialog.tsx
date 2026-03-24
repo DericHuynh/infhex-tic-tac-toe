@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AccountProfile, CreateSessionRequest, GameTimeControl, LobbyVisibility } from '@ih3t/shared'
+import { formatGameTimeSeconds } from '../utils/gameTimeControl'
 
 interface CreateLobbyDialogProps {
   isOpen: boolean
@@ -55,14 +56,6 @@ const MATCH_TIME_DEFAULT = 5
 
 const INCREMENT_STEP_SECONDS = [0, 1, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300] as const
 const INCREMENT_DEFAULT = 5
-
-function formatStepSeconds(value: number) {
-  if (value >= 60 && value % 60 === 0) {
-    return `${value / 60}m`
-  }
-
-  return `${value}s`
-}
 
 function SelectableOptions({ onClick, selected, title, description, disabled = false }: Readonly<{ onClick: () => void, selected: boolean, title: string, description: string, disabled?: boolean }>) {
   return (
@@ -144,13 +137,12 @@ function CreateLobbyDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/70 px-4 py-6 backdrop-blur-md">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/70 px-4 py-6 backdrop-blur-md flex flex-col">
       <div
         className="absolute inset-0"
-        aria-hidden="true"
         onClick={onClose}
       />
-      <div className="relative z-10 flex min-h-full items-center justify-center">
+      <div className="relative my-auto z-10 flex self-center items-center justify-center">
         <section className="relative my-auto w-full max-w-2xl overflow-hidden rounded-[1.25rem] border border-white/10 bg-[linear-gradient(155deg,_rgba(15,23,42,0.97),_rgba(17,24,39,0.95)_55%,_rgba(30,41,59,0.92))] p-3.5 text-white shadow-[0_24px_80px_rgba(2,6,23,0.55)] sm:p-4">
           <div className="absolute -right-10 -top-14 h-20 w-20 rounded-full bg-sky-400/16 blur-3xl" />
           <div className="absolute -left-8 bottom-0 h-16 w-16 rounded-full bg-amber-300/12 blur-3xl" />
@@ -163,12 +155,6 @@ function CreateLobbyDialog({
                   Lobby Setup
                 </h2>
               </div>
-              <button
-                onClick={onClose}
-                className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:bg-white/12"
-              >
-                Close
-              </button>
             </div>
 
             <div className="mt-3 space-y-2.5">
@@ -267,7 +253,7 @@ function CreateLobbyDialog({
                         <div className="space-y-2.5">
                           <div>
                             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Turn Time</div>
-                            <div className="mt-0.5 text-lg font-bold text-white">{formatStepSeconds(turnTimeSeconds)}</div>
+                            <div className="mt-0.5 text-lg font-bold text-white">{formatGameTimeSeconds(turnTimeSeconds)}</div>
                           </div>
                           <input
                             type="range"
@@ -308,7 +294,7 @@ function CreateLobbyDialog({
                           <div className="space-y-2.5">
                             <div>
                               <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Increment</div>
-                              <div className="mt-0.5 text-lg font-bold text-white">{formatStepSeconds(incrementSeconds)}</div>
+                              <div className="mt-0.5 text-lg font-bold text-white">{formatGameTimeSeconds(incrementSeconds)}</div>
                             </div>
                             <input
                               type="range"

@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import type { Collection, Document } from 'mongodb';
 import {
+    type AccountEloHistory,
     type AdminLongestGameInDuration,
     type AdminLongestGameInMoves,
     type DatabaseGamePlayer,
@@ -17,6 +18,7 @@ import {
     zFinishedGameRecord,
     zFinishedGamesPage,
     zFinishedGameSummary,
+    AccountEloHistoryPoint,
 } from '@ih3t/shared';
 import { z } from 'zod';
 import { ROOT_LOGGER } from '../logger';
@@ -59,10 +61,15 @@ export interface PlayerProfileStatistics {
     totalGamesWon: number;
     rankedGamesPlayed: number;
     rankedGamesWon: number;
+    currentRankedWinStreak: number;
+    longestRankedWinStreak: number;
+    longestGamePlayedMs: number;
+    longestGameByMoves: number;
     totalMovesMade: number;
 }
 
 const maxTrackedGameDurationMs = 8 * 60 * 60 * 1000;
+const accountEloHistoryBucketSizeMs = 60 * 60 * 1000;
 
 @injectable()
 export class GameHistoryRepository {
@@ -209,13 +216,16 @@ export class GameHistoryRepository {
                 this.logMissingHistory('game-history-elo-update-error', gameId);
             }
         } catch (error: unknown) {
-            this.logger.error({
-                err: error,
-                type: 'game-history',
-                event: 'game-history-elo-update-error',
-                storage: 'mongodb',
-                gameId
-            }, 'Failed to update stored player elo changes');
+            this.logger.error(
+                {
+                    err: error,
+                    type: 'game-history',
+                    event: 'game-history-elo-update-error',
+                    storage: 'mongodb',
+                    gameId
+                },
+                'Failed to update stored player elo changes'
+            );
         }
     }
 
@@ -506,101 +516,169 @@ export class GameHistoryRepository {
         }
 
         const collection = await this.getCollection();
-        const [stats] = await collection.aggregate<Omit<PlayerProfileStatistics, 'profileId'>>([
-            {
-                $match: {
-                    finishedAt: {
-                        $ne: null
-                    },
-                    'players.profileId': normalizedProfileId
-                }
-            },
-            {
-                $set: {
-                    matchedPlayer: {
-                        $first: {
-                            $filter: {
-                                input: '$players',
-                                as: 'player',
-                                cond: {
-                                    $eq: ['$$player.profileId', normalizedProfileId]
+        const [statsResult, ratedGameResults] = await Promise.all([
+            collection.aggregate<Omit<PlayerProfileStatistics, 'profileId' | 'currentRankedWinStreak' | 'longestRankedWinStreak'>>([
+                {
+                    $match: {
+                        finishedAt: {
+                            $ne: null
+                        },
+                        'players.profileId': normalizedProfileId
+                    }
+                },
+                {
+                    $set: {
+                        matchedPlayer: {
+                            $first: {
+                                $filter: {
+                                    input: '$players',
+                                    as: 'player',
+                                    cond: {
+                                        $eq: ['$$player.profileId', normalizedProfileId]
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            },
-            {
-                $match: {
-                    'matchedPlayer.playerId': {
-                        $exists: true
-                    }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    isRated: {
-                        $eq: ['$gameOptions.rated', true]
-                    },
-                    gameWon: {
-                        $cond: [
-                            { $eq: ['$gameResult.winningPlayerId', '$matchedPlayer.playerId'] },
-                            1,
-                            0
-                        ]
-                    },
-                    playerMoveCount: {
-                        $size: {
-                            $filter: {
-                                input: '$moves',
-                                as: 'move',
-                                cond: {
-                                    $eq: ['$$move.playerId', '$matchedPlayer.playerId']
-                                }
-                            }
+                },
+                {
+                    $match: {
+                        'matchedPlayer.playerId': {
+                            $exists: true
                         }
                     }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalGamesPlayed: { $sum: 1 },
-                    totalGamesWon: { $sum: '$gameWon' },
-                    rankedGamesPlayed: {
-                        $sum: {
-                            $cond: ['$isRated', 1, 0]
-                        }
-                    },
-                    rankedGamesWon: {
-                        $sum: {
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        isRated: {
+                            $eq: ['$gameOptions.rated', true]
+                        },
+                        gameWon: {
                             $cond: [
-                                {
-                                    $and: [
-                                        '$isRated',
-                                        { $eq: ['$gameWon', 1] }
-                                    ]
-                                },
+                                { $eq: ['$gameResult.winningPlayerId', '$matchedPlayer.playerId'] },
                                 1,
                                 0
                             ]
+                        },
+                        longestTrackedDurationMs: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$gameResult.durationMs', null] },
+                                        { $lt: ['$gameResult.durationMs', maxTrackedGameDurationMs] }
+                                    ]
+                                },
+                                '$gameResult.durationMs',
+                                0
+                            ]
+                        },
+                        moveCount: '$moveCount',
+                        playerMoveCount: {
+                            $size: {
+                                $filter: {
+                                    input: '$moves',
+                                    as: 'move',
+                                    cond: {
+                                        $eq: ['$$move.playerId', '$matchedPlayer.playerId']
+                                    }
+                                }
+                            }
                         }
-                    },
-                    totalMovesMade: { $sum: '$playerMoveCount' }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalGamesPlayed: { $sum: 1 },
+                        totalGamesWon: { $sum: '$gameWon' },
+                        rankedGamesPlayed: {
+                            $sum: {
+                                $cond: ['$isRated', 1, 0]
+                            }
+                        },
+                        rankedGamesWon: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            '$isRated',
+                                            { $eq: ['$gameWon', 1] }
+                                        ]
+                                    },
+                                    1,
+                                    0
+                                ]
+                            }
+                        },
+                        longestGamePlayedMs: { $max: '$longestTrackedDurationMs' },
+                        longestGameByMoves: { $max: '$moveCount' },
+                        totalMovesMade: { $sum: '$playerMoveCount' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        totalGamesPlayed: 1,
+                        totalGamesWon: 1,
+                        rankedGamesPlayed: 1,
+                        rankedGamesWon: 1,
+                        longestGamePlayedMs: 1,
+                        longestGameByMoves: 1,
+                        totalMovesMade: 1
+                    }
                 }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    totalGamesPlayed: 1,
-                    totalGamesWon: 1,
-                    rankedGamesPlayed: 1,
-                    rankedGamesWon: 1,
-                    totalMovesMade: 1
+            ]).toArray(),
+            collection.aggregate<{ gameWon: boolean }>([
+                {
+                    $match: {
+                        finishedAt: {
+                            $ne: null
+                        },
+                        'players.profileId': normalizedProfileId,
+                        'gameOptions.rated': true
+                    }
+                },
+                {
+                    $set: {
+                        matchedPlayer: {
+                            $first: {
+                                $filter: {
+                                    input: '$players',
+                                    as: 'player',
+                                    cond: {
+                                        $eq: ['$$player.profileId', normalizedProfileId]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $match: {
+                        'matchedPlayer.playerId': {
+                            $exists: true
+                        }
+                    }
+                },
+                {
+                    $sort: {
+                        finishedAt: -1,
+                        id: -1
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        gameWon: {
+                            $eq: ['$gameResult.winningPlayerId', '$matchedPlayer.playerId']
+                        }
+                    }
                 }
-            }
-        ]).toArray();
+            ]).toArray()
+        ]);
+        const [stats] = statsResult;
+        const streakStats = this.calculateWinStreaks(ratedGameResults.map((game) => game.gameWon));
 
         return {
             profileId: normalizedProfileId,
@@ -608,7 +686,97 @@ export class GameHistoryRepository {
             totalGamesWon: stats?.totalGamesWon ?? 0,
             rankedGamesPlayed: stats?.rankedGamesPlayed ?? 0,
             rankedGamesWon: stats?.rankedGamesWon ?? 0,
+            currentRankedWinStreak: streakStats.current,
+            longestRankedWinStreak: streakStats.longest,
+            longestGamePlayedMs: stats?.longestGamePlayedMs ?? 0,
+            longestGameByMoves: stats?.longestGameByMoves ?? 0,
             totalMovesMade: stats?.totalMovesMade ?? 0
+        };
+    }
+
+    async getPlayerEloHistory(profileId: string): Promise<AccountEloHistory> {
+        const normalizedProfileId = profileId.trim();
+        if (normalizedProfileId.length === 0) {
+            return {
+                bucketSizeMs: accountEloHistoryBucketSizeMs,
+                points: []
+            };
+        }
+
+        const collection = await this.getCollection();
+        const points = await collection.aggregate<AccountEloHistoryPoint>([
+            {
+                $match: {
+                    finishedAt: {
+                        $ne: null
+                    },
+                    'gameOptions.rated': true,
+                    'players.profileId': normalizedProfileId
+                }
+            },
+            {
+                $unwind: '$players'
+            },
+            {
+                $match: {
+                    'players.profileId': normalizedProfileId,
+                    'players.elo': {
+                        $ne: null
+                    },
+                    'players.eloChange': {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $set: {
+                    timestamp: {
+                        $subtract: [
+                            '$finishedAt',
+                            {
+                                $mod: ['$finishedAt', accountEloHistoryBucketSizeMs]
+                            }
+                        ]
+                    },
+                    postGameElo: {
+                        $add: ['$players.elo', '$players.eloChange']
+                    }
+                }
+            },
+            {
+                $sort: {
+                    finishedAt: 1,
+                    id: 1
+                }
+            },
+            {
+                $group: {
+                    _id: '$timestamp',
+                    timestamp: {
+                        $first: '$timestamp'
+                    },
+                    elo: {
+                        $max: '$postGameElo'
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    timestamp: 1,
+                    elo: 1,
+                }
+            },
+            {
+                $sort: {
+                    timestamp: 1
+                }
+            }
+        ]).toArray();
+
+        return {
+            bucketSizeMs: accountEloHistoryBucketSizeMs,
+            points
         };
     }
 
@@ -829,7 +997,40 @@ export class GameHistoryRepository {
             totalGamesWon: 0,
             rankedGamesPlayed: 0,
             rankedGamesWon: 0,
+            currentRankedWinStreak: 0,
+            longestRankedWinStreak: 0,
+            longestGamePlayedMs: 0,
+            longestGameByMoves: 0,
             totalMovesMade: 0
+        };
+    }
+
+    private calculateWinStreaks(gameResults: boolean[]): { current: number; longest: number } {
+        let longestStreak = 0;
+        let activeStreak = 0;
+        let currentStreak = 0;
+        let currentStreakActive = true;
+
+        for (const gameWon of gameResults) {
+            if (!gameWon) {
+                currentStreakActive = false;
+                activeStreak = 0;
+                continue;
+            }
+
+            activeStreak += 1;
+            if (currentStreakActive) {
+                currentStreak = activeStreak;
+            }
+
+            if (activeStreak > longestStreak) {
+                longestStreak = activeStreak;
+            }
+        }
+
+        return {
+            current: currentStreak,
+            longest: longestStreak
         };
     }
 

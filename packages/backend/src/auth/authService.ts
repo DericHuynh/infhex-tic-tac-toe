@@ -1,4 +1,4 @@
-import { ExpressAuth, getSession, type ExpressAuthConfig, type Session } from '@auth/express';
+import { ExpressAuth, type ExpressAuthConfig } from '@auth/express';
 import _Discord, { type DiscordProfile } from '@auth/express/providers/discord';
 import type { Request } from 'express';
 import type { Socket } from 'socket.io';
@@ -102,11 +102,7 @@ export class AuthService {
         this.handler = ExpressAuth(this.config);
     }
 
-    async getRequestSession(request: Request): Promise<Session | null> {
-        return getSession(request, this.config);
-    }
-
-    async getCurrentUser(request: Request): Promise<AccountUserProfile | null> {
+    async getUserFromRequest(request: Request): Promise<AccountUserProfile | null> {
         const sessionToken = getCookieValue(request.get('cookie'), this.sessionCookieName);
         if (!sessionToken) {
             return null;
@@ -115,16 +111,7 @@ export class AuthService {
         return this.authRepository.getUserProfileBySessionToken(sessionToken);
     }
 
-    async getCurrentUserPreferences(request: Request): Promise<AccountPreferences> {
-        const currentUser = await this.getCurrentUser(request);
-        if (!currentUser) {
-            return DEFAULT_ACCOUNT_PREFERENCES;
-        }
-
-        return await this.authRepository.getAccountPreferences(currentUser.id) ?? DEFAULT_ACCOUNT_PREFERENCES;
-    }
-
-    async getCurrentUserFromSocket(
+    async getUserFromSocket(
         socket: Socket<ClientToServerEvents, ServerToClientEvents>
     ): Promise<AccountUserProfile | null> {
         const sessionToken = getCookieValue(
@@ -137,6 +124,10 @@ export class AuthService {
         }
 
         return this.authRepository.getUserProfileBySessionToken(sessionToken);
+    }
+
+    async getUserPreferences(userId: string): Promise<AccountPreferences> {
+        return await this.authRepository.getAccountPreferences(userId) ?? DEFAULT_ACCOUNT_PREFERENCES;
     }
 }
 

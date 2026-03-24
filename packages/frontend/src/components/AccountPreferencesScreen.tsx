@@ -1,9 +1,8 @@
 import type { AccountPreferences, AccountProfile } from '@ih3t/shared'
 import { useState } from 'react'
 import { toast } from 'react-toastify'
-import { signInWithDiscord, updateAccountPreferences } from '../authClient'
-import { queryClient } from '../queryClient'
-import { queryKeys } from '../queryHooks'
+import { updateAccountPreferences } from '../query/accountClient'
+import { signInWithDiscord } from '../query/authClient'
 import PageCorpus from './PageCorpus'
 import React from 'react'
 
@@ -115,21 +114,17 @@ function AccountPreferencesScreen({
       return
     }
 
-    const previousPreferences = preferences
     const nextPreferences = {
       ...preferences,
       [key]: nextValue
     }
 
     setSavingPreferenceKey(key)
-    queryClient.setQueryData(queryKeys.accountPreferences, { preferences: nextPreferences })
 
     try {
-      const response = await updateAccountPreferences(nextPreferences)
-      queryClient.setQueryData(queryKeys.accountPreferences, response)
+      await updateAccountPreferences(nextPreferences)
     } catch (error) {
       console.error('Failed to update account preferences:', error)
-      queryClient.setQueryData(queryKeys.accountPreferences, { preferences: previousPreferences })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update account preferences.')
     } finally {
       setSavingPreferenceKey(currentKey => (currentKey === key ? null : currentKey))
@@ -142,7 +137,7 @@ function AccountPreferencesScreen({
     <PageCorpus
       category="Preferences"
       title="Account Preferences"
-      description="Manage your personal gameplay display and move-handling settings."
+      description="Manage your personal gameplay, display, and matchmaking settings."
     >
       <div className="min-h-0 flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
         {isLoading ? (
@@ -201,6 +196,14 @@ function AccountPreferencesScreen({
                     disabled={isSavingPreference}
                     isSaving={savingPreferenceKey === 'autoPlaceOriginTile'}
                     onToggle={(nextChecked) => void handlePreferenceToggle('autoPlaceOriginTile', nextChecked)}
+                  />
+                  <PreferenceSwitchCard
+                    label="Allow Self-Joining Casual Lobbies"
+                    description="Allow you to join your own online casual lobby as the second player."
+                    checked={preferences.allowSelfJoinCasualGames}
+                    disabled={isSavingPreference}
+                    isSaving={savingPreferenceKey === 'allowSelfJoinCasualGames'}
+                    onToggle={(nextChecked) => void handlePreferenceToggle('allowSelfJoinCasualGames', nextChecked)}
                   />
                 </div>
               ) : (

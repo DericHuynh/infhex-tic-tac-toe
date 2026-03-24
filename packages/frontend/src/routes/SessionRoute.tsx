@@ -13,10 +13,11 @@ import {
   placeCell,
   requestRematch,
   returnToLobby,
+  sendSessionChatMessage,
   surrenderGame
 } from '../liveGameClient'
 import { useLiveGameStore } from '../liveGameStore'
-import { useQueryAccount, useQueryAccountPreferences } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
 import { buildFinishedGamePath } from './archiveRouteState'
 
 function isPlainLeftClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -443,9 +444,11 @@ function SessionRoute() {
           gameState={game.gameState}
           shutdown={shutdown}
           onPlaceCell={placeCell}
+          onSendChatMessage={participantRole === 'player' ? sendSessionChatMessage : undefined}
           onLeave={participantRole === 'player' ? surrenderGame : returnToLobbyAndNavigate}
           leaveLabel={participantRole === 'player' ? 'Surrender' : 'Leave Game'}
           showTilePieceMarkers={showTilePieceMarkers}
+          chatMessages={liveScreen.session.chatMessages}
         />
         {leaveConfirmModal}
       </>
@@ -482,9 +485,11 @@ function SessionRoute() {
             gameState={game.gameState}
             shutdown={shutdown}
             onPlaceCell={() => { }}
+            onSendChatMessage={sendSessionChatMessage}
             onLeave={returnToLobbyAndNavigate}
             interactionEnabled={false}
             showTilePieceMarkers={showTilePieceMarkers}
+            chatMessages={liveScreen.session.chatMessages}
             overlay={result === 'winner'
               ? (
                 <WinnerScreen
@@ -527,6 +532,7 @@ function SessionRoute() {
           onLeave={returnToLobbyAndNavigate}
           interactionEnabled={false}
           showTilePieceMarkers={showTilePieceMarkers}
+          chatMessages={liveScreen.session.chatMessages}
           overlay={(
             <SpectatorFinishedScreen
               session={liveScreen.session}

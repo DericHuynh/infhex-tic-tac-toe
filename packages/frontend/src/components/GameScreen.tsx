@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
-import type { GameState, LobbyOptions, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
+import type { GameState, LobbyOptions, SessionChatMessage, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
 import { playTilePlacedSound } from '../soundEffects'
+import { getPlayerLabel, getPlayerTileColor } from '../utils/gameBoard'
 import GameBoardCanvas from './game-screen/GameBoardCanvas'
 import GameScreenHud, { HudPlayerInfo } from './game-screen/GameScreenHud'
+import GameChatBox from './game-screen/GameChatBox'
 import TurnTimerHud from './game-screen/TurnTimerHud'
-import { getPlayerLabel, getPlayerTileColor } from './game-screen/gameBoardUtils'
 import useGameBoard from './game-screen/useGameBoard'
+import ShutdownTimer from './game-screen/ShutdownTimer'
 
 interface GameScreenProps {
   sessionId: string
@@ -18,11 +20,13 @@ interface GameScreenProps {
   gameState: GameState
   shutdown: ShutdownState | null
   onPlaceCell: (x: number, y: number) => void
+  onSendChatMessage?: (message: string) => void
   onLeave: () => void
   leaveLabel?: string
   overlay?: ReactNode
   interactionEnabled?: boolean
   showTilePieceMarkers?: boolean
+  chatMessages?: SessionChatMessage[]
 }
 
 function GameScreen({
@@ -35,11 +39,13 @@ function GameScreen({
   gameState,
   shutdown,
   onPlaceCell,
+  onSendChatMessage,
   onLeave,
   leaveLabel,
   overlay,
   interactionEnabled = true,
-  showTilePieceMarkers = false
+  showTilePieceMarkers = false,
+  chatMessages = []
 }: Readonly<GameScreenProps>) {
   const previousCellCountRef = useRef(gameState.cells.length)
 
@@ -68,8 +74,8 @@ function GameScreen({
     renderableCellCount,
     resetView
   } = useGameBoard({
-    boardState: gameState,
-    highlightedCells: gameState.highlightedCells,
+    gameState: gameState,
+    highlightedCells: gameState.winner?.cells ?? "turn",
     localPlayerId: isSpectator ? null : currentPlayerId,
     interactionEnabled,
     showTilePieceMarkers,
@@ -104,21 +110,10 @@ function GameScreen({
             />
           )}
 
-          {interactionEnabled && (
-            <GameScreenHud
-              sessionId={sessionId}
-              players={hudPlayerInfo}
-              localPlayerId={currentPlayerId}
-
-              occupiedCellCount={gameState.cells.length}
-              renderableCellCount={renderableCellCount}
-
-              shutdown={shutdown}
-
-              leaveLabel={leaveLabel}
-              onLeave={onLeave}
-              onResetView={resetView}
-            />
+          {shutdown && (
+            <div className="rounded-full border border-amber-200/30 bg-slate-950/92 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-lg">
+              Restarting <ShutdownTimer shutdown={shutdown} />
+            </div>
           )}
         </div>
       </div>
@@ -128,7 +123,35 @@ function GameScreen({
           {overlay}
         </div>
       )}
-    </div>
+
+      <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
+        {!isSpectator && onSendChatMessage && (
+          <GameChatBox
+            currentParticipantId={currentPlayerId}
+            messages={chatMessages}
+            onSendMessage={onSendChatMessage}
+            placement={interactionEnabled ? 'in-game' : 'finished'}
+            collapsible={interactionEnabled}
+          />
+        )}
+        {interactionEnabled && (
+          <GameScreenHud
+            sessionId={sessionId}
+            players={hudPlayerInfo}
+            localPlayerId={currentPlayerId}
+
+            occupiedCellCount={gameState.cells.length}
+            renderableCellCount={renderableCellCount}
+
+            shutdown={shutdown}
+
+            leaveLabel={leaveLabel}
+            onLeave={onLeave}
+            onResetView={resetView}
+          />
+        )}
+      </div>
+    </div >
   )
 }
 

@@ -1,17 +1,18 @@
 import {
     cloneGameState,
     createEmptyGameState,
+    PlayerRating,
     type GameState,
     type LobbyInfo,
     type LobbyOptions,
     type ParticipantConnection,
+    type SessionChatMessage,
     type SessionFinishReason,
     type SessionInfo,
     type SessionParticipant,
     type SessionParticipantRole,
-    type ShutdownState,
 } from '@ih3t/shared';
-import type { RequestClientInfo, SocketClientInfo } from '../network/clientInfo';
+import type { RequestClientInfo } from '../network/clientInfo';
 import type { AccountUserProfile } from '../auth/authRepository';
 
 export type ServerParticipantConnection = ParticipantConnection & ({
@@ -20,12 +21,22 @@ export type ServerParticipantConnection = ParticipantConnection & ({
 } | {
     status: 'orphaned';
     timeout: ReturnType<typeof setTimeout>;
+} | {
+    status: 'disconnected';
+    timestamp: number;
 });
 
 export interface ServerSessionParticipant extends SessionParticipant {
     deviceId: string
 
+    ratingAdjusted: PlayerRating | null,
+
     connection: ServerParticipantConnection
+}
+
+export type ServerSessionParticipation = {
+    participant: ServerSessionParticipant,
+    role: SessionParticipantRole,
 }
 
 export interface ServerGameSession {
@@ -41,7 +52,7 @@ export interface ServerGameSession {
     finishReason: SessionFinishReason | null;
     winningPlayerId: string | null;
     rematchAcceptedPlayerIds: string[];
-    gamePlayers: ServerSessionParticipant[];
+    chatMessages: SessionChatMessage[];
     isRatedGame: boolean;
 }
 
@@ -54,15 +65,11 @@ export interface PublicGameStatePayload {
 }
 
 export interface JoinSessionParams {
-    sessionId: string;
-    socketId: string;
-    client: SocketClientInfo;
-    user: AccountUserProfile;
-}
+    deviceId: string;
 
-export interface JoinSessionResult extends ClientGameParticipation {
-    participantRole: SessionParticipantRole;
-    isNewParticipant: boolean;
+    profile: AccountUserProfile | null;
+    displayName: string;
+    allowSelfJoinCasualGames: boolean;
 }
 
 export interface CreateSessionParams {
@@ -91,7 +98,6 @@ export interface SessionUpdatedEvent {
 
 export interface SessionManagerEventHandlers {
     lobbyListUpdated?: (lobbies: LobbyInfo[]) => void;
-    shutdownUpdated?: (shutdown: ShutdownState | null) => void;
     sessionUpdated?: (event: SessionUpdatedEvent) => void;
     gameStateUpdated?: (payload: PublicGameStatePayload) => void;
     participantJoined?: (event: ParticipantJoinedEvent) => void;
@@ -101,18 +107,15 @@ export interface SessionManagerEventHandlers {
 export interface RematchRequestResult {
     status: 'pending' | 'ready';
     players: string[];
-}
-
-export interface RematchSessionResult {
-    sessionId: string;
-    session: SessionInfo;
+    spectators: string[];
 }
 
 export type ClientGameParticipation = {
-    session: SessionInfo,
-    participantId: string
+    session: SessionInfo
+    gameState?: PublicGameStatePayload
 
-    gameState?: PublicGameStatePayload,
+    participantId: string
+    participantRole: SessionParticipantRole
 };
 
 export function cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
@@ -131,10 +134,13 @@ export function toPublicParticipantConnection(connection: ServerParticipantConne
 export function cloneSessionParticipant(participant: ServerSessionParticipant): SessionParticipant {
     return {
         id: participant.id,
+
         displayName: participant.displayName,
         profileId: participant.profileId,
-        elo: participant.elo,
-        eloChange: participant.eloChange,
+
+        rating: participant.rating,
+        ratingAdjustment: participant.ratingAdjustment,
+
         connection: toPublicParticipantConnection(participant.connection)
     };
 }
@@ -177,10 +183,10 @@ export function createGameSession(
         finishReason: null,
         winningPlayerId: null,
         rematchAcceptedPlayerIds: [],
+        chatMessages: [],
         isRatedGame: false,
 
         gameId: '',
-        gamePlayers: [],
         gameState: createEmptyGameState(),
     };
 }

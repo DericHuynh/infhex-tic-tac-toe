@@ -2,8 +2,11 @@ import { z } from 'zod';
 
 export const DUMMY = 'Hello?';
 export const PLACE_CELL_HEX_RADIUS = 8;
+const WINNING_LINE_LENGTH = 6;
 export type { ChangelogDay, ChangelogEntry, ChangelogEntryKind } from './changelogTypes';
 export { CHANGELOG_COMMIT_COUNT, CHANGELOG_DAYS, CHANGELOG_GENERATED_AT } from './generatedChangelog';
+export { FINISHED_GAMES_PAGE_SIZE, queryKeys } from './queryKeys';
+export type { FinishedGamesArchiveView } from './queryKeys';
 
 export interface HexCoordinate {
     x: number;
@@ -33,6 +36,9 @@ export const zParticipantConnection = z.discriminatedUnion('status', [
     }),
     z.object({
         status: z.literal('orphaned')
+    }),
+    z.object({
+        status: z.literal('disconnected')
     })
 ]);
 export type ParticipantConnection = z.infer<typeof zParticipantConnection>;
@@ -108,7 +114,7 @@ export const DEFAULT_LOBBY_OPTIONS: LobbyOptions = zLobbyOptions.parse({
 
 export const zShutdownState = z.object({
     scheduledAt: zTimestamp,
-    shutdownAt: zTimestamp
+    gracefulTimeout: zTimestamp
 });
 export type ShutdownState = z.infer<typeof zShutdownState>;
 
@@ -138,6 +144,23 @@ export const zAdminBroadcastMessageResponse = z.object({
 });
 export type AdminBroadcastMessageResponse = z.infer<typeof zAdminBroadcastMessageResponse>;
 
+export const zSessionChatMessageText = z.string().trim().min(1).max(280);
+export type SessionChatMessageText = z.infer<typeof zSessionChatMessageText>;
+
+export const zSessionChatMessage = z.object({
+    id: zIdentifier,
+    participantId: zIdentifier,
+    participantDisplayName: z.string(),
+    message: zSessionChatMessageText,
+    sentAt: zTimestamp
+});
+export type SessionChatMessage = z.infer<typeof zSessionChatMessage>;
+
+export const zSessionChatMessageRequest = z.object({
+    message: zSessionChatMessageText
+});
+export type SessionChatMessageRequest = z.infer<typeof zSessionChatMessageRequest>;
+
 export const zServerSettings = z.object({
     maxConcurrentGames: z.number().int().min(0).max(10_000).nullable().default(null)
 });
@@ -162,6 +185,12 @@ export const zBoardCell = z.object({
     occupiedBy: zCellOccupant
 });
 export type BoardCell = z.infer<typeof zBoardCell>;
+
+export const zGameWinner = z.object({
+    cells: z.array(zHexCoordinate),
+    playerId: zIdentifier
+});
+export type GameWinner = z.infer<typeof zGameWinner>;
 
 export class GameRuleError extends Error {
     constructor(message: string) {
@@ -192,7 +221,7 @@ export function isCellWithinPlacementRadius(
 
 export const GameState = z.object({
     cells: z.array(zBoardCell),
-    highlightedCells: z.array(zHexCoordinate),
+    winner: zGameWinner.nullable(),
     playerTiles: z.record(z.string(), zPlayerTileConfig),
     currentTurnPlayerId: zIdentifier.nullable(),
     placementsRemaining: z.number().int().nonnegative(),
@@ -255,13 +284,12 @@ export interface ApplyGameMoveParams {
 
 export interface ApplyGameMoveResult {
     turnCompleted: boolean;
-    winningPlayerId: string | null;
 }
 
 export function createEmptyGameState(): GameState {
     return {
         cells: [],
-        highlightedCells: [],
+        winner: null,
         playerTiles: {},
         currentTurnPlayerId: null,
         placementsRemaining: 0,
@@ -274,7 +302,12 @@ export function cloneGameState(gameState: GameState): GameState {
     return {
         ...gameState,
         cells: gameState.cells.map((cell) => ({ ...cell })),
-        highlightedCells: gameState.highlightedCells.map((cell) => ({ ...cell })),
+        winner: gameState.winner
+            ? {
+                ...gameState.winner,
+                cells: gameState.winner.cells.map((cell) => ({ ...cell }))
+            }
+            : null,
         playerTiles: Object.fromEntries(
             Object.entries(gameState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
         ),
@@ -290,7 +323,7 @@ export function createStartedGameState(playerIds: readonly string[]): GameState 
 
 export function initializeGameState(gameState: GameState, playerIds: readonly string[]): void {
     gameState.cells = [];
-    gameState.highlightedCells = [];
+    gameState.winner = null;
     gameState.playerTiles = buildPlayerTileConfigMap(playerIds);
     gameState.currentTurnExpiresAt = null;
     gameState.playerTimeRemainingMs = {};
@@ -300,13 +333,7 @@ export function initializeGameState(gameState: GameState, playerIds: readonly st
 export function getPublicGameState(gameState: GameState): GameState {
     return {
         ...cloneGameState(gameState),
-        cells: [...gameState.cells].sort((a, b) => {
-            if (a.y === b.y) {
-                return a.x - b.x;
-            }
-
-            return a.y - b.y;
-        })
+        cells: [...gameState.cells]
     };
 }
 
@@ -319,6 +346,11 @@ export function applyGameMove(gameState: GameState, params: ApplyGameMoveParams)
 
     if (gameState.placementsRemaining <= 0) {
         throw new GameRuleError('No placements remaining this turn');
+    }
+
+    if (gameState.winner) {
+        /* no more moves are allowed */
+        throw new GameRuleError('Encountered moves after a winning game state');
     }
 
     const cellKey = getCellKey(x, y);
@@ -335,7 +367,6 @@ export function applyGameMove(gameState: GameState, params: ApplyGameMoveParams)
         throw new GameRuleError(`Cell must be within ${PLACE_CELL_HEX_RADIUS} hexes of an existing placed cell`);
     }
 
-    const isFirstPlacementOfTurn = gameState.cells.length === 0 || gameState.placementsRemaining === 2;
     const turnCompleted = gameState.placementsRemaining === 1;
     const playerIds = Object.keys(gameState.playerTiles);
 
@@ -344,15 +375,13 @@ export function applyGameMove(gameState: GameState, params: ApplyGameMoveParams)
         y,
         occupiedBy: zCellOccupant.parse(playerId)
     });
-    gameState.highlightedCells = isFirstPlacementOfTurn
-        ? [{ x, y }]
-        : [...gameState.highlightedCells, { x, y }].slice(-2);
     gameState.placementsRemaining -= 1;
 
-    if (hasSixInARow(gameState, playerId, x, y)) {
-        return {
-            turnCompleted,
-            winningPlayerId: playerId
+    const winningLine = findWinningLine(gameState, playerId, x, y);
+    if (winningLine) {
+        gameState.winner = {
+            cells: winningLine,
+            playerId
         };
     }
 
@@ -363,8 +392,7 @@ export function applyGameMove(gameState: GameState, params: ApplyGameMoveParams)
     }
 
     return {
-        turnCompleted,
-        winningPlayerId: null
+        turnCompleted
     };
 }
 
@@ -376,7 +404,7 @@ function setCurrentTurn(gameState: GameState, playerId: string | null, placement
     }
 }
 
-function hasSixInARow(gameState: GameState, playerId: string, x: number, y: number): boolean {
+function findWinningLine(gameState: GameState, playerId: string, x: number, y: number): HexCoordinate[] | null {
     const occupiedCells = new Set(
         gameState.cells
             .filter((cell) => cell.occupiedBy === playerId)
@@ -388,43 +416,69 @@ function hasSixInARow(gameState: GameState, playerId: string, x: number, y: numb
         [1, -1]
     ];
 
-    return directions.some(([directionX, directionY]) => {
-        const connectedCount =
-            1 +
-            countConnectedTiles(occupiedCells, x, y, directionX, directionY) +
-            countConnectedTiles(occupiedCells, x, y, -directionX, -directionY);
+    for (const [directionX, directionY] of directions) {
+        const backwardCells = collectConnectedTiles(occupiedCells, x, y, -directionX, -directionY).reverse();
+        const forwardCells = collectConnectedTiles(occupiedCells, x, y, directionX, directionY);
+        const line = [...backwardCells, { x, y }, ...forwardCells];
 
-        return connectedCount >= 6;
-    });
+        if (line.length >= WINNING_LINE_LENGTH) {
+            return selectWinningLineSegment(line, backwardCells.length);
+        }
+    }
+
+    return null;
 }
 
-function countConnectedTiles(
+function collectConnectedTiles(
     occupiedCells: Set<string>,
     startX: number,
     startY: number,
     directionX: number,
     directionY: number
-): number {
-    let count = 0;
+): HexCoordinate[] {
+    const connectedTiles: HexCoordinate[] = [];
     let currentX = startX + directionX;
     let currentY = startY + directionY;
 
     while (occupiedCells.has(getCellKey(currentX, currentY))) {
-        count += 1;
+        connectedTiles.push({ x: currentX, y: currentY });
         currentX += directionX;
         currentY += directionY;
     }
 
-    return count;
+    return connectedTiles;
 }
+
+function selectWinningLineSegment(line: readonly HexCoordinate[], pivotIndex: number): HexCoordinate[] {
+    const minStartIndex = Math.max(0, pivotIndex - (WINNING_LINE_LENGTH - 1));
+    const maxStartIndex = Math.min(pivotIndex, line.length - WINNING_LINE_LENGTH);
+    const preferredStartIndex = pivotIndex - Math.floor((WINNING_LINE_LENGTH - 1) / 2);
+    const startIndex = Math.min(maxStartIndex, Math.max(minStartIndex, preferredStartIndex));
+
+    return line.slice(startIndex, startIndex + WINNING_LINE_LENGTH);
+}
+
+export const zPlayerRating = z.object({
+    eloScore: z.number(),
+    gameCount: z.number().nonnegative()
+})
+export type PlayerRating = z.infer<typeof zPlayerRating>;
+
+export const zPlayerRatingAdjustment = z.object({
+    eloGain: z.number(),
+    eloLoss: z.number(),
+})
+export type PlayerRatingAdjustment = z.infer<typeof zPlayerRatingAdjustment>;
 
 export const zSessionParticipant = z.object({
     id: zIdentifier,
+    connection: zParticipantConnection,
+
     displayName: z.string(),
     profileId: zIdentifier.nullable(),
-    elo: z.number().int().nullable().default(null),
-    eloChange: z.number().int().nullable().default(null),
-    connection: zParticipantConnection
+
+    rating: zPlayerRating,
+    ratingAdjustment: zPlayerRatingAdjustment.nullable().default(null)
 });
 export type SessionParticipant = z.infer<typeof zSessionParticipant>;
 
@@ -465,7 +519,8 @@ const zSessionInfoBase = z.object({
     id: zIdentifier,
     players: z.array(zSessionParticipant),
     spectators: z.array(zSessionParticipant),
-    gameOptions: zLobbyOptions
+    gameOptions: zLobbyOptions,
+    chatMessages: z.array(zSessionChatMessage).default([])
 });
 
 export const zSessionInfo = z.discriminatedUnion('state', [
@@ -620,6 +675,7 @@ export const zClientToServerEvents = z.custom<{
     'leave-session': (sessionId: string) => void;
     'surrender-session': (sessionId: string) => void;
     'place-cell': (data: PlaceCellRequest) => void;
+    'send-session-chat-message': (data: SessionChatMessageRequest) => void;
     'request-rematch': (sessionId: string) => void;
     'cancel-rematch': (sessionId: string) => void;
 }>();
@@ -654,6 +710,18 @@ const zNormalizedUsername = z.string()
         message: 'Your username contains unsupported characters.'
     });
 
+export const zAccountEloHistoryPoint = z.object({
+    timestamp: zTimestamp,
+    elo: z.number().int().nonnegative(),
+});
+export type AccountEloHistoryPoint = z.infer<typeof zAccountEloHistoryPoint>;
+
+export const zAccountEloHistory = z.object({
+    bucketSizeMs: z.number().int().positive(),
+    points: z.array(zAccountEloHistoryPoint)
+});
+export type AccountEloHistory = z.infer<typeof zAccountEloHistory>;
+
 export const zAccountStatistics = z.object({
     totalGames: z.object({
         played: z.number().int().nonnegative(),
@@ -661,9 +729,14 @@ export const zAccountStatistics = z.object({
     }),
     rankedGames: z.object({
         played: z.number().int().nonnegative(),
-        won: z.number().int().nonnegative()
+        won: z.number().int().nonnegative(),
+        currentWinStreak: z.number().int().nonnegative(),
+        longestWinStreak: z.number().int().nonnegative()
     }),
+    longestGamePlayedMs: z.number().int().nonnegative(),
+    longestGameByMoves: z.number().int().nonnegative(),
     totalMovesMade: z.number().int().nonnegative(),
+    eloHistory: zAccountEloHistory,
     elo: z.number().int().nonnegative(),
     worldRank: z.number().int().positive().nullable()
 });
@@ -673,6 +746,7 @@ export const zAccountPreferences = z.object({
     moveConfirmation: z.boolean().default(false),
     autoPlaceOriginTile: z.boolean().default(false),
     tilePieceMarkers: z.boolean().default(false),
+    allowSelfJoinCasualGames: z.boolean().default(false),
     changelogReadAt: z.number().int().nonnegative().nullable().default(null)
 });
 export type AccountPreferences = z.infer<typeof zAccountPreferences>;
@@ -690,10 +764,20 @@ export const zAccountProfile = z.object({
 });
 export type AccountProfile = z.infer<typeof zAccountProfile>;
 
+export const zPublicAccountProfile = zAccountProfile.omit({
+    email: true
+});
+export type PublicAccountProfile = z.infer<typeof zPublicAccountProfile>;
+
 export const zAccountResponse = z.object({
     user: zAccountProfile.nullable()
 });
 export type AccountResponse = z.infer<typeof zAccountResponse>;
+
+export const zPublicAccountResponse = z.object({
+    user: zPublicAccountProfile.nullable()
+});
+export type PublicAccountResponse = z.infer<typeof zPublicAccountResponse>;
 
 export const zAccountStatisticsResponse = z.object({
     statistics: zAccountStatistics

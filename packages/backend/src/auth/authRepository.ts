@@ -69,6 +69,8 @@ type StoredAdapterUser = AdapterUser & {
     lastActiveAt: number;
 };
 
+const DEFAULT_PLAYER_ELO = 1000;
+
 export interface AdminUserWindowStats {
     newUsers: number;
     activeUsers: number;
@@ -106,6 +108,7 @@ export class AuthRepository implements Adapter {
         const document: AuthUserDocument = {
             _id: new ObjectId(),
             role: 'user',
+            highestElo: DEFAULT_PLAYER_ELO,
             preferences: {
                 ...DEFAULT_ACCOUNT_PREFERENCES,
                 changelogReadAt: Date.now()
@@ -328,6 +331,17 @@ export class AuthRepository implements Adapter {
 
         const user = await this.touchUserLastActive(sessionAndUser.user);
         return this.mapAccountUserProfile(user);
+    }
+
+    async getUserProfileById(userId: string): Promise<AccountUserProfile | null> {
+        const collection = await this.getUsersCollection();
+        const objectId = this.parseObjectId(userId);
+        if (!objectId) {
+            return null;
+        }
+
+        const document = await collection.findOne({ _id: objectId });
+        return document ? this.mapAccountUserProfile(this.mapUserDocument(document)) : null;
     }
 
     async updateUsername(userId: string, username: string): Promise<AccountUserProfile | null> {
