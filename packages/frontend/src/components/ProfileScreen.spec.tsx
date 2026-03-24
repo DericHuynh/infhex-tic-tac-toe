@@ -2,6 +2,8 @@ import type { AccountStatistics, PublicAccountProfile } from '@ih3t/shared'
 import { expect, test } from '@playwright/experimental-ct-react'
 import ProfileScreen from './ProfileScreen'
 
+const renderTimestamp = 1_700_000_800_000
+
 test.use({
   viewport: {
     width: 1440,
@@ -32,11 +34,29 @@ const statistics: AccountStatistics = {
   longestGamePlayedMs: 5_430_000,
   longestGameByMoves: 183,
   totalMovesMade: 2_764,
+  eloHistory: {
+    bucketSizeMs: 3_600_000,
+    points: [
+      { timestamp: renderTimestamp - (18 * 24 * 60 * 60 * 1000), elo: 1_601 },
+      { timestamp: renderTimestamp - (12 * 24 * 60 * 60 * 1000), elo: 1_624 },
+      { timestamp: renderTimestamp - (7 * 24 * 60 * 60 * 1000), elo: 1_658 },
+      { timestamp: renderTimestamp - (3 * 24 * 60 * 60 * 1000), elo: 1_697 },
+      { timestamp: renderTimestamp - (18 * 60 * 60 * 1000), elo: 1_742 },
+    ],
+  },
   elo: 1_742,
   worldRank: 17,
 }
 
+async function setRenderTimestamp(page: { addInitScript: (callback: (value: number) => void, value: number) => Promise<void> }) {
+  await page.addInitScript((value) => {
+    ;(window as typeof window & { __IH3T_RENDERED_AT__?: number }).__IH3T_RENDERED_AT__ = value
+  }, renderTimestamp)
+}
+
 test('starts the Discord sign-in flow for private account access', async ({ mount, page }) => {
+  await setRenderTimestamp(page)
+
   await page.route('**/auth/csrf', async (route) => {
     await route.fulfill({
       status: 200,
@@ -133,7 +153,9 @@ test('starts the Discord sign-in flow for private account access', async ({ moun
   })
 })
 
-test('matches the full profile statistics screen', async ({ mount }) => {
+test('matches the full profile statistics screen', async ({ mount, page }) => {
+  await setRenderTimestamp(page)
+
   const component = await mount(
     <ProfileScreen
       account={account}
@@ -164,6 +186,8 @@ test.describe('mobile layout', () => {
   })
 
   test('matches the profile statistics screen without unexpected horizontal overflow', async ({ mount, page }) => {
+    await setRenderTimestamp(page)
+
     const component = await mount(
       <ProfileScreen
         account={account}

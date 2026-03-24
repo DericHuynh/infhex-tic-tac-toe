@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import type { Collection, Document } from 'mongodb';
 import {
+    type AccountEloHistory,
     type AdminLongestGameInDuration,
     type AdminLongestGameInMoves,
     type DatabaseGamePlayer,
@@ -17,6 +18,7 @@ import {
     zFinishedGameRecord,
     zFinishedGamesPage,
     zFinishedGameSummary,
+    AccountEloHistoryPoint,
 } from '@ih3t/shared';
 import { z } from 'zod';
 import { ROOT_LOGGER } from '../logger';
@@ -67,6 +69,7 @@ export interface PlayerProfileStatistics {
 }
 
 const maxTrackedGameDurationMs = 8 * 60 * 60 * 1000;
+const accountEloHistoryBucketSizeMs = 60 * 60 * 1000;
 
 @injectable()
 export class GameHistoryRepository {
@@ -688,6 +691,92 @@ export class GameHistoryRepository {
             longestGamePlayedMs: stats?.longestGamePlayedMs ?? 0,
             longestGameByMoves: stats?.longestGameByMoves ?? 0,
             totalMovesMade: stats?.totalMovesMade ?? 0
+        };
+    }
+
+    async getPlayerEloHistory(profileId: string): Promise<AccountEloHistory> {
+        const normalizedProfileId = profileId.trim();
+        if (normalizedProfileId.length === 0) {
+            return {
+                bucketSizeMs: accountEloHistoryBucketSizeMs,
+                points: []
+            };
+        }
+
+        const collection = await this.getCollection();
+        const points = await collection.aggregate<AccountEloHistoryPoint>([
+            {
+                $match: {
+                    finishedAt: {
+                        $ne: null
+                    },
+                    'gameOptions.rated': true,
+                    'players.profileId': normalizedProfileId
+                }
+            },
+            {
+                $unwind: '$players'
+            },
+            {
+                $match: {
+                    'players.profileId': normalizedProfileId,
+                    'players.elo': {
+                        $ne: null
+                    },
+                    'players.eloChange': {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $set: {
+                    timestamp: {
+                        $subtract: [
+                            '$finishedAt',
+                            {
+                                $mod: ['$finishedAt', accountEloHistoryBucketSizeMs]
+                            }
+                        ]
+                    },
+                    postGameElo: {
+                        $add: ['$players.elo', '$players.eloChange']
+                    }
+                }
+            },
+            {
+                $sort: {
+                    finishedAt: 1,
+                    id: 1
+                }
+            },
+            {
+                $group: {
+                    _id: '$timestamp',
+                    timestamp: {
+                        $first: '$timestamp'
+                    },
+                    elo: {
+                        $max: '$postGameElo'
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    timestamp: 1,
+                    elo: 1,
+                }
+            },
+            {
+                $sort: {
+                    timestamp: 1
+                }
+            }
+        ]).toArray();
+
+        return {
+            bucketSizeMs: accountEloHistoryBucketSizeMs,
+            points
         };
     }
 

@@ -220,8 +220,9 @@ export class FrontendSsrRenderer {
   }
 
   private async buildAccountStatistics(profileId: string): Promise<AccountStatisticsResponse['statistics']> {
-    const [gameStats, playerRating, leaderboardPlacement] = await Promise.all([
+    const [gameStats, eloHistory, playerRating, leaderboardPlacement] = await Promise.all([
       this.dependencies.gameHistoryRepository.getPlayerProfileStatistics(profileId),
+      this.dependencies.gameHistoryRepository.getPlayerEloHistory(profileId),
       this.dependencies.eloRepository.getPlayerRating(profileId),
       this.dependencies.eloRepository.getLeaderboardPlacement(profileId)
     ])
@@ -240,6 +241,7 @@ export class FrontendSsrRenderer {
       longestGamePlayedMs: gameStats.longestGamePlayedMs,
       longestGameByMoves: gameStats.longestGameByMoves,
       totalMovesMade: gameStats.totalMovesMade,
+      eloHistory,
       elo: leaderboardPlacement?.eloScore ?? playerRating?.eloScore ?? 1000,
       worldRank: leaderboardPlacement?.rank ?? null
     }

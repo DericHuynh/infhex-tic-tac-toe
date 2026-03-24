@@ -710,6 +710,18 @@ const zNormalizedUsername = z.string()
         message: 'Your username contains unsupported characters.'
     });
 
+export const zAccountEloHistoryPoint = z.object({
+    timestamp: zTimestamp,
+    elo: z.number().int().nonnegative(),
+});
+export type AccountEloHistoryPoint = z.infer<typeof zAccountEloHistoryPoint>;
+
+export const zAccountEloHistory = z.object({
+    bucketSizeMs: z.number().int().positive(),
+    points: z.array(zAccountEloHistoryPoint)
+});
+export type AccountEloHistory = z.infer<typeof zAccountEloHistory>;
+
 export const zAccountStatistics = z.object({
     totalGames: z.object({
         played: z.number().int().nonnegative(),
@@ -724,6 +736,7 @@ export const zAccountStatistics = z.object({
     longestGamePlayedMs: z.number().int().nonnegative(),
     longestGameByMoves: z.number().int().nonnegative(),
     totalMovesMade: z.number().int().nonnegative(),
+    eloHistory: zAccountEloHistory,
     elo: z.number().int().nonnegative(),
     worldRank: z.number().int().positive().nullable()
 });

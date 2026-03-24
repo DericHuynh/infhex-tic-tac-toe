@@ -1,15 +1,33 @@
-import type { AccountStatistics, PublicAccountProfile } from '@ih3t/shared'
+import type { AccountEloHistory, AccountStatistics, PublicAccountProfile } from '@ih3t/shared'
 import { type ReactNode, useState } from 'react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
 import { toast } from 'react-toastify'
 import { signInWithDiscord } from '../query/authClient'
 import { getInitialRenderTimestamp } from '../ssrState'
-import { formatCalendarDate, formatRelativeTimeFrom } from '../utils/dateTime'
+import {
+  formatCalendarDate,
+  formatChartDateTime,
+  formatDateTime,
+  formatRelativeTimeFrom
+} from '../utils/dateTime'
 import { formatDetailedDuration } from '../utils/duration'
 import {
   formatWinSummary,
   formatWorldRank
 } from '../utils/profileStats'
 import PageCorpus from './PageCorpus'
+import React from 'react'
+
+const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000
+const defaultPlayerElo = 1000
 
 function showErrorToast(message: string) {
   toast.error(message, {
@@ -128,6 +146,162 @@ function StatisticsEmptyState({ message = 'Statistics will appear here once your
     <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 px-5 py-10 text-center text-sm text-slate-300">
       {message}
     </div>
+  )
+}
+
+function EloHistoryChartSection({
+  eloHistory,
+  currentElo,
+  referenceTimestamp
+}: Readonly<{
+  eloHistory: AccountEloHistory
+  currentElo: number
+  referenceTimestamp: number
+}>) {
+  type EloChartPoint = {
+    timestamp: number
+    elo: number
+  }
+
+  const windowStart = referenceTimestamp - thirtyDaysMs
+  const bucketSizeMs = Math.max(1, eloHistory.bucketSizeMs)
+  const sortedPoints = [...eloHistory.points]
+    .filter((point) => point.timestamp <= referenceTimestamp)
+    .sort((left, right) => left.timestamp - right.timestamp)
+  const pointByTimestamp = new Map(sortedPoints.map((point) => [point.timestamp, point] as const))
+  const lastPointBeforeWindow = sortedPoints.reduce<AccountStatistics['eloHistory']['points'][number] | null>((latestPoint, point) => {
+    if (point.timestamp > windowStart) {
+      return latestPoint
+    }
+
+    if (!latestPoint || point.timestamp > latestPoint.timestamp) {
+      return point
+    }
+
+    return latestPoint
+  }, null)
+  const startPoint = {
+    timestamp: windowStart,
+    elo: lastPointBeforeWindow?.elo ?? defaultPlayerElo
+  } satisfies EloChartPoint
+  const chartPoints: EloChartPoint[] = [startPoint]
+  let currentBucketElo = startPoint.elo
+  let nextTimestamp = Math.floor(windowStart / bucketSizeMs) * bucketSizeMs
+
+  if (nextTimestamp <= windowStart) {
+    nextTimestamp += bucketSizeMs
+  }
+
+  while (nextTimestamp < referenceTimestamp) {
+    const exactPoint = pointByTimestamp.get(nextTimestamp)
+    if (exactPoint) {
+      currentBucketElo = exactPoint.elo
+    }
+
+    chartPoints.push({
+      timestamp: nextTimestamp,
+      elo: exactPoint?.elo ?? currentBucketElo
+    })
+
+    if (exactPoint) {
+      currentBucketElo = exactPoint.elo
+    }
+
+    nextTimestamp += bucketSizeMs
+  }
+
+  chartPoints.push({
+    timestamp: referenceTimestamp,
+    elo: currentElo
+  })
+
+  const highestPoint = chartPoints.reduce((currentHighest, point) => {
+    if (point.elo > currentHighest.elo) {
+      return point
+    }
+
+    if (point.elo === currentHighest.elo && point.timestamp > currentHighest.timestamp) {
+      return point
+    }
+
+    return currentHighest
+  }, chartPoints[0])
+  const [lowestElo, highestElo] = chartPoints.reduce<[number, number]>((range, point) => {
+    return [
+      Math.min(range[0], point.elo),
+      Math.max(range[1], point.elo)
+    ]
+  }, [chartPoints[0].elo, chartPoints[0].elo])
+  const yAxisPadding = Math.max(10, Math.ceil((highestElo - lowestElo) * 0.12))
+  const yAxisDomain: [number, number] = [
+    Math.max(0, lowestElo - yAxisPadding),
+    highestElo + yAxisPadding
+  ]
+
+  return (
+    <React.Fragment>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-[0.28em] text-sky-200/85">Competitive Trend</div>
+          <h3 className="mt-3 text-xl font-black uppercase tracking-[0.08em] text-white">ELO Rating</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            ELO rating over the last 30 days.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+          <div className="text-[0.62rem] uppercase tracking-[0.24em] text-slate-500">Highest Rating</div>
+          <div className="mt-1 text-lg font-bold leading-none text-white">{highestPoint.elo}</div>
+          <div className="mt-1 text-xs text-slate-400">
+            Reached {formatDateTime(highestPoint.timestamp)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 h-72 rounded-[1.25rem] border border-white/8 bg-slate-950/45 p-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartPoints} margin={{ top: 12, right: 12, bottom: 12, left: 0 }}>
+            <CartesianGrid stroke="rgba(148,163,184,0.16)" vertical={false} />
+            <XAxis
+              dataKey="timestamp"
+              minTickGap={28}
+              stroke="#94a3b8"
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={formatChartDateTime}
+            />
+            <YAxis
+              allowDecimals={false}
+              domain={yAxisDomain}
+              stroke="#94a3b8"
+              tickLine={false}
+              axisLine={false}
+              width={48}
+            />
+            <Tooltip
+              cursor={{ stroke: 'rgba(125,211,252,0.35)', strokeWidth: 1 }}
+              contentStyle={{
+                backgroundColor: 'rgba(2,6,23,0.94)',
+                border: '1px solid rgba(148,163,184,0.2)',
+                borderRadius: '1rem',
+                color: '#e2e8f0'
+              }}
+              formatter={(value) => [`${value} ELO`, 'Rating']}
+              labelFormatter={(label) => formatDateTime(Number(label))}
+            />
+            <Line
+              type="monotone"
+              dataKey="elo"
+              stroke="#7dd3fc"
+              strokeWidth={3}
+              dot={chartPoints.length === 1}
+              activeDot={{ r: 5, fill: '#7dd3fc' }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </React.Fragment>
   )
 }
 
@@ -290,69 +464,72 @@ function ProfileScreen({
                   {statisticsErrorMessage}
                 </div>
               ) : statistics ? (
-                <div className="mt-6 grid gap-4 xl:grid-cols-[1.05fr,1.2fr,0.95fr]">
-                  <StatisticsGroup
-                    eyebrow="Overview"
-                    title="Overall Play"
-                    description="All finished games, regardless of queue type, along with the volume of moves you've logged."
-                    accentClassName="text-sky-200/85"
-                    cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
-                  >
-                    <SecondaryStatCard
-                      label="Total Games"
-                      value={statistics.totalGames.played}
-                      detail={formatWinSummary(statistics.totalGames.won, statistics.totalGames.played)}
+                <>
+                  <section className="mt-6 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.5))] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+                    <EloHistoryChartSection
+                      eloHistory={statistics.eloHistory}
+                      currentElo={statistics.elo}
+                      referenceTimestamp={referenceTimestamp}
                     />
-                    <SecondaryStatCard
-                      label="Total Moves"
-                      value={statistics.totalMovesMade}
-                      detail="Moves recorded across all of your finished matches."
-                    />
-                  </StatisticsGroup>
+                    <div className={"mt-6 grid grid-cols-1 gap-6 md:grid-cols-3"}>
+                      <SecondaryStatCard
+                        label="Ranked Games"
+                        value={statistics.rankedGames.played}
+                        detail={formatWinSummary(statistics.rankedGames.won, statistics.rankedGames.played)}
+                      />
+                      <SecondaryStatCard
+                        label="Current Win Streak"
+                        value={statistics.rankedGames.currentWinStreak}
+                        detail={"Current number of unbeaten rated games"}
+                      />
+                      <SecondaryStatCard
+                        label="Longest Win Streak"
+                        value={statistics.rankedGames.longestWinStreak}
+                        detail={"Longest streak of unbeaten rated games"}
+                      />
+                    </div>
+                  </section>
 
-                  <StatisticsGroup
-                    eyebrow="Competitive"
-                    title="Ranked Performance"
-                    description="Rated-game results and momentum, grouped together so competitive progress is easier to scan."
-                    accentClassName="text-amber-200/85"
-                    cardGridClassName="sm:grid-cols-3 xl:grid-cols-1"
-                  >
-                    <SecondaryStatCard
-                      label="Ranked Games"
-                      value={statistics.rankedGames.played}
-                      detail={formatWinSummary(statistics.rankedGames.won, statistics.rankedGames.played)}
-                    />
-                    <SecondaryStatCard
-                      label="Current Win Streak"
-                      value={statistics.rankedGames.currentWinStreak}
-                      detail={"Current number of unbeaten rated games"}
-                    />
-                    <SecondaryStatCard
-                      label="Longest Win Streak"
-                      value={statistics.rankedGames.longestWinStreak}
-                      detail={"Longest streak of unbeaten rated games"}
-                    />
-                  </StatisticsGroup>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[1.05fr,1.2fr,0.95fr]">
+                    <StatisticsGroup
+                      eyebrow="Overview"
+                      title="Overall Games"
+                      description="All finished games, regardless of queue type, along with the volume of moves you've logged."
+                      accentClassName="text-sky-200/85"
+                      cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
+                    >
+                      <SecondaryStatCard
+                        label="Total Games"
+                        value={statistics.totalGames.played}
+                        detail={formatWinSummary(statistics.totalGames.won, statistics.totalGames.played)}
+                      />
+                      <SecondaryStatCard
+                        label="Total Moves"
+                        value={statistics.totalMovesMade}
+                        detail="Moves recorded across all of your finished matches."
+                      />
+                    </StatisticsGroup>
 
-                  <StatisticsGroup
-                    eyebrow="Records"
-                    title="Personal Bests"
-                    description="Your longest finished matches measured by time and by move count."
-                    accentClassName="text-emerald-200/85"
-                    cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
-                  >
-                    <SecondaryStatCard
-                      label="Longest Game"
-                      value={formatDetailedDuration(statistics.longestGamePlayedMs)}
-                      detail="Your longest finished game by duration."
-                    />
-                    <SecondaryStatCard
-                      label="Longest By Moves"
-                      value={statistics.longestGameByMoves}
-                      detail="Your longest finished game by move count."
-                    />
-                  </StatisticsGroup>
-                </div>
+                    <StatisticsGroup
+                      eyebrow="Records"
+                      title="Personal Highlights"
+                      description="Personal highlights like longest match measured by time or move count."
+                      accentClassName="text-emerald-200/85"
+                      cardGridClassName="sm:grid-cols-2 xl:grid-cols-1"
+                    >
+                      <SecondaryStatCard
+                        label="Longest Game"
+                        value={formatDetailedDuration(statistics.longestGamePlayedMs)}
+                        detail="Your longest finished game by duration."
+                      />
+                      <SecondaryStatCard
+                        label="Longest By Moves"
+                        value={statistics.longestGameByMoves}
+                        detail="Your longest finished game by move count."
+                      />
+                    </StatisticsGroup>
+                  </div>
+                </>
               ) : (
                 <div className="mt-6 rounded-[1.25rem] border border-white/10 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-300">
                   Statistics will appear here once your profile data is ready.

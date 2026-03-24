@@ -432,8 +432,9 @@ export class ApiRouter {
     }
 
     private async buildAccountStatistics(profileId: string): Promise<AccountStatisticsResponse['statistics']> {
-        const [gameStats, playerRating, leaderboardPlacement] = await Promise.all([
+        const [gameStats, eloHistory, playerRating, leaderboardPlacement] = await Promise.all([
             this.gameHistoryRepository.getPlayerProfileStatistics(profileId),
+            this.gameHistoryRepository.getPlayerEloHistory(profileId),
             this.eloRepository.getPlayerRating(profileId),
             this.eloRepository.getLeaderboardPlacement(profileId)
         ]);
@@ -452,6 +453,7 @@ export class ApiRouter {
             longestGamePlayedMs: gameStats.longestGamePlayedMs,
             longestGameByMoves: gameStats.longestGameByMoves,
             totalMovesMade: gameStats.totalMovesMade,
+            eloHistory,
             elo: leaderboardPlacement?.eloScore ?? playerRating?.eloScore ?? 1000,
             worldRank: leaderboardPlacement?.rank ?? null
         };
