@@ -741,16 +741,21 @@ export class SessionManager {
 
         this.metricsTracker.track('game-finished', {
             sessionId: session.id,
+
             reason,
             winningPlayerId,
+
             players: session.players.map(({ id }) => id),
             spectators: session.spectators.map(({ id }) => id),
-            boardState: session.gameState,
+
             createdAt: new Date(session.createdAt).toISOString(),
             startedAt: session.startedAt === null ? null : new Date(session.startedAt).toISOString(),
             finishedAt: new Date(finishedAt).toISOString(),
+
             gameDurationMs,
-            totalLifetimeMs: finishedAt - session.createdAt
+            totalLifetimeMs: finishedAt - session.createdAt,
+
+            gameId: session.gameId
         });
 
         this.timeControl.clearSession(session.id);
