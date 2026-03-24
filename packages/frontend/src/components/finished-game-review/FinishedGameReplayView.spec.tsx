@@ -78,6 +78,8 @@ test('steps through replay moves with the left and right arrow keys', async ({ m
 
   await expect(component.getByText(/^Move 2\/2$/)).toBeVisible()
   await expect(component.getByText('Beta at (1, 0)')).toBeVisible()
+  await expect(component.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', '/profile/profile-1')
+  await expect(component.getByRole('link', { name: 'Beta' })).toHaveAttribute('href', '/profile/profile-2')
 
   await page.keyboard.press('ArrowLeft')
   await expect(component.getByText(/^Move 1\/2$/)).toBeVisible()

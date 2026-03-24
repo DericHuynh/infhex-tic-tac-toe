@@ -8,7 +8,7 @@ import {
   type SandboxGamePosition
 } from '@ih3t/shared'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { formatDateTimeWithSeconds } from '../../utils/dateTime'
 import { formatMinutesSeconds } from '../../utils/duration'
 import { formatEloChange } from '../../utils/elo'
@@ -172,6 +172,11 @@ function buildReplaySandboxPosition(game: FinishedGameRecord, visibleMoveCount: 
     name: `${getPlayerLabel(game.players, firstPlayer)} vs ${getPlayerLabel(game.players, secondPlayer)} - ${moveLabel}`,
     gamePosition
   }
+}
+
+function getProfileHref(profileId: string | null | undefined): string | null {
+  const normalizedProfileId = profileId?.trim()
+  return normalizedProfileId ? `/profile/${encodeURIComponent(normalizedProfileId)}` : null
 }
 
 function FinishedGameReplayView({
@@ -463,38 +468,53 @@ function FinishedGameReplayView({
               <div>
                 <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Players</div>
                 <div className="mt-1.5 space-y-0.5">
-                  {game.players.map((player) => (
-                    <div
-                      key={player.playerId}
-                      className="flex flex-col items-start gap-2 py-1 text-sm text-white sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: getPlayerTileColor(game.playerTiles, player.playerId) }}
-                        />
-                        <span className="break-words">{getPlayerLabel(game.players, player.playerId)}</span>
-                        {gameResult?.winningPlayerId === player.playerId && (
-                          <span className="rounded-full border border-amber-200/30 bg-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-black">
-                            Winner
-                          </span>
-                        )}
-                      </div>
+                  {game.players.map((player) => {
+                    const playerProfileHref = getProfileHref(player.profileId)
 
-                      <div className="w-full text-left sm:w-auto sm:text-right">
-                        {player.elo !== null && (
-                          <div className="text-sm font-medium text-white">
-                            {player.elo} ELO
-                          </div>
-                        )}
-                        {player.eloChange !== null && (
-                          <div className={`text-xs ${player.eloChange >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                            {formatEloChange(player.eloChange)}
-                          </div>
-                        )}
+                    return (
+                      <div
+                        key={player.playerId}
+                        className="flex flex-col items-start gap-2 py-1 text-sm text-white sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: getPlayerTileColor(game.playerTiles, player.playerId) }}
+                          />
+                          {playerProfileHref
+                            ? (
+                              <Link
+                                to={playerProfileHref}
+                                className="break-words transition hover:text-sky-100"
+                              >
+                                {getPlayerLabel(game.players, player.playerId)}
+                              </Link>
+                              )
+                            : (
+                              <span className="break-words">{getPlayerLabel(game.players, player.playerId)}</span>
+                              )}
+                          {gameResult?.winningPlayerId === player.playerId && (
+                            <span className="rounded-full border border-amber-200/30 bg-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-black">
+                              Winner
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="w-full text-left sm:w-auto sm:text-right">
+                          {player.elo !== null && (
+                            <div className="text-sm font-medium text-white">
+                              {player.elo} ELO
+                            </div>
+                          )}
+                          {player.eloChange !== null && (
+                            <div className={`text-xs ${player.eloChange >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                              {formatEloChange(player.eloChange)}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </div>
